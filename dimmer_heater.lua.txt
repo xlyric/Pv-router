@@ -1,0 +1,33 @@
+
+-- soft fuse security -- caliber of your fuse or for dimmer max input power.
+fuse=2.5 -- in Ampere max
+load=1000 -- in watt for 220v
+valuemax = fuse * 220 / load * 100 -- max load to percent
+
+
+-- Noise in ampere
+Noise=100
+-- Resistance of the load ( W )
+Resistance=load/220
+-- load by activity
+activityload=450 -- in watt
+
+-- variables from Domoticz
+
+-- dimmer name on domoticz ( case sensitive )
+DIMMERNAME="testdimmer"
+
+-- production intensity name ( case sensitive )
+INTENSITYNAME="pvrouteur" --
+-- main external intensity
+LINKYINTENSITY="pvrouteur"
+
+PUISSANCEREEL="PuissanceLinky"
+
+
+-- consumption intensity name
+CONSUMPTION=NONE
+
+-- variables  for ESP8266 connection
+IP="192.168.1.75"
+-- IDXNAME="testdimmer"

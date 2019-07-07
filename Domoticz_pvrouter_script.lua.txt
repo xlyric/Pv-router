@@ -1,0 +1,99 @@
+-- simplest program for adapt load to the production and noise. refresh every one minute
+
+require "dimmer_heater_test"
+
+-- main program --------------------------
+
+commandArray = {}
+
+if (devicechanged[LINKYINTENSITY]) then
+
+
+--      if CONSUMPTION~=NONE then
+--      Noise =
+--      end
+
+
+                -- get production Intensity
+--      val_production = tonumber(otherdevices_svalues[INTENSITYNAME])
+
+                -- get main external intensity
+        val_linky = tonumber(otherdevices_svalues[LINKYINTENSITY])
+
+                -- get dimmer information
+        val_dimmer = tonumber(otherdevices_svalues[DIMMERNAME])
+        val_puissance = tonumber(otherdevices_svalues["PuissanceLinky"])
+        -- security max input power or fuse
+--        if val_production > fuse then
+--              val_production = fuse
+--      end
+
+--    print("Linky  = "..val_linky)
+--    print("dimmer = "..val_dimmer)
+
+        if val_linky < 0  then
+
+
+--    val_dimmer = val_dimmer
+        --neededpower=val_linky*100/load
+        --print("needed = "..neededpower)
+                -- calcul needed power for the  dimmer
+--              print("val_dimmer = "..val_dimmer)
+--              Dimmer_Power=val_dimmer-neededpower
+--              print("dimmer powd  = "..val_linky)
+                -- converte information 0-100
+                -- Command_Dimmer=math.floor(Dimmer_Power*1023/Resistance)
+                Info_Domoticz=val_dimmer + 5
+
+        else
+                -- Command_Dimmer=0
+                Info_Domoticz=val_dimmer
+
+        end
+
+        -- reduire autoconso
+        if  val_linky > Noise then
+
+                Info_Domoticz=val_dimmer-2
+
+        end
+
+
+        -- activité
+        if  val_linky > activityload then
+
+                Info_Domoticz=0
+
+        end
+
+
+
+
+        --- dimmer à 0
+        if Info_Domoticz < 0 then
+        Info_Domoticz=0
+        end
+
+        -- securité
+        if Info_Domoticz > 50 then
+        Info_Domoticz=50
+        end
+
+
+
+                -- test for make modification is only needed
+        if Info_Domoticz ~= val_dimmer then
+
+                print("pv routeur = "..Info_Domoticz)   -- convert to watt
+
+                -- return information in Domoticz
+                commandArray[DIMMERNAME]='Set Level '..Info_Domoticz
+
+
+        end
+--        print("commande  = "..Info_Domoticz)
+--       print("plinky  = "..val_puissance)
+
+end
+
+return commandArray
