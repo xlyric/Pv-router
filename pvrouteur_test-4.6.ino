@@ -1,3 +1,9 @@
+///////////////////
+//  Pv router by Cyril Poissonnier 2019 
+//  Pv routeur pour détecter l'injection par mesure de volume et envoie d'information sur domoticz 
+//  pour réponse ( switch, dimmer ... ) 
+//  fait pour fonctionner avec le circuit imprimé v1.1
+/////////////////////////
 #include <LiquidCrystal_I2C.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
@@ -7,59 +13,51 @@
 // Include custom images
 #include "images.h"
 
-// test avec recherche de valeur min
 String VERSION = "Version 1.6" ;
 
-
 // WIFI
-const char* WIFI_SSID = "MonSSID";
-const char* WIFI_PWD = "Monmdp";
+const char* WIFI_SSID = "SSID";
+const char* WIFI_PWD = "Passwd";
 
-// domoticz 
-const char* domoticz_server = "IP serveur Domoticz" ;
-const String IDX  = "IDX DOMOTICZ" ;
+// configuration des infos domoticz 
+const char* domoticz_server = "domoticz IP" ;
+const String IDX  = "36" ;
 
 WiFiClient domoticz_client;
 
 // Display Settings OLED
 const int I2C_DISPLAY_ADDRESS = 0x3c;
 
-//constantes 
-#define USE_SERIAL  Serial
-#define linky  A0
-#define lcd_scd D1
-#define lcd_scl D2
+//constantes de mesure
+#define delta 100 /// zone de volume dans lequel l'IOT doit travailler ou non 
+int deltaneg = 0 - delta ;
 int LCD = 0 ;
 #define OLED 1
-#define sens D5
-#define delta 100 
-int deltaneg = 0 - delta ;
-#define dephasage 3
+#define attente 1 /// nombre de seconde entre chaque cycle de mesure.
+int middle = 535 ; 
+int cycle = 52;
+
+//constantes de fonctionnement
+#define USE_SERIAL  Serial
+#define linky  A0
+#define lcd_scd D1  // LCD et OLED
+#define lcd_scl D2  // LCD et OLED 
+#define sens D5   /// niveau de la diode 
+#define pinreset 1 /// si D0 et reset connecté >> 1
 
 /// constantes de debug 
 #define debug 0  // recherche la valeur milieu >> middle   
-int sent = 0 ;//--- coupe la transmission vers domoticz
+int sent = 1 ;//--- coupe la transmission vers domoticz
 #define modeserial 0
-#define oscillo 1
+#define oscillo 1   /// affichage de l'oscillo sur le server web. 
 
-
-#define pinreset 1 /// si D0 et reset connecté >> 1
-
-#define attente 1 /// nombre de seconde entre chaque cycle de mesure.
-//#define middle 538 // zero by default 
-//int middle = 544 ; 
-int middle = 535 ; 
-int cycle = 52;
 int somme ;
 int signe = 0;
 int temp = 0; 
 int timer = 0 ; 
 String retour, retourbrut; 
 int nbtent=0;
-int refreshdom = 0;
-//// calcul de dephasage et correction  
-int frontmontant = 0 ; 
-int   moyenne; 
+int moyenne; 
 String message; 
 
 // LCD init
@@ -96,9 +94,8 @@ if ( LCD ==1 ) {
 }
 
 
-  // Initialising the UI will init the display too.
+  // Initialising OLED
   display.init();
-
   display.flipScreenVertically();
   display.setFont(ArialMT_Plain_10);
   display.clear();
@@ -107,14 +104,15 @@ if ( LCD ==1 ) {
   if ( debug == 0) { 
 ///// start Wifi 
 if ( LCD ==1 ) {     lcd.setCursor(2, 1); }
+
     WiFi.begin(WIFI_SSID, WIFI_PWD);
     while (WiFi.status() != WL_CONNECTED) {
       if (nbtent<10){
-        nbtent++ ;   
-        delay(1000);
-        Serial.print(".");
-        lcd.print("."); 
-        
+       nbtent++ ;   
+       delay(1000);
+       Serial.print(".");
+       lcd.print("."); 
+       
        display.setTextAlignment(TEXT_ALIGN_CENTER);
        display.drawString(64, 0, "Connecting"); 
        display.drawXbm(34, 14, WiFi_Logo_width, WiFi_Logo_height, WiFi_Logo_bits);
@@ -139,8 +137,6 @@ if ( LCD ==1 ) {     lcd.setCursor(2, 1); }
   Serial.print ( "IP address: " ); Serial.println ( WiFi.localIP() );
   lcd.setCursor(2, 1);
   lcd.print("                ");
-  
-
   }
   
 // ip address on LCD display
@@ -148,31 +144,15 @@ if ( LCD ==1 ) {     lcd.setCursor(2, 1); }
   lcd.print("IP address:        "); 
   lcd.setCursor(2, 1);      
   lcd.print(WiFi.localIP());
-  
-
-if (debug == 1 )
-  {
-  lcd.setCursor(10, 0);
-  lcd.print("DEBUG");
-  }
-  
-if (oscillo == 1 )
-  {
-  lcd.setCursor(5, 0);
-  lcd.print("OSC");
-   
-  }
+ 
 
     // On branche la fonction qui gère la premiere page / link to the function that manage launch page
   server.on ( "/", handleRoot );
   server.begin();
   Serial.println ( "starting Web server" );
-
   Serial.println ( "setup ok" );
 
-  display.clear();
   affiche_info_main();
-  display.display();
 
 }
 
@@ -182,9 +162,12 @@ if (oscillo == 1 )
 
 void loop() {
 
+/// preparation des mesures
   temp = 0; 
   timer = 0 ; 
- 
+  int dimmer = 0;
+  somme = 0; 
+  int i = 0;
 
 // lecture de la valeur min 
 
@@ -192,14 +175,7 @@ void loop() {
   front(0);
   front(1);
 
-/// préparation d'un front 0
-
 // analyse par volumes
-  int dimmer = 0;
-  somme = 0; 
-  int i = 0;
- 
- // front(0);
 
 //// lecture dans la période de la demi alternance fait par la diode  pour calcul de l'air
   while ( timer < cycle )
@@ -209,7 +185,7 @@ void loop() {
       somme = somme + temp - middle ;
     }
   timer ++ ;
-  delayMicroseconds (480);
+  delayMicroseconds (480); // frequence de 100Hz environ
   } 
 
 ////  détection d'une conso supérieur à la consigne
@@ -257,7 +233,7 @@ void loop() {
   }
 
 
-//// Oscillo mode 
+//// Oscillo mode creation du tableau de mesure pour le graph
 
 if ( oscillo == 1) {
   timer = 0; 
@@ -293,10 +269,8 @@ if ( oscillo == 1) {
   retour += "," ; 
   retour += temp ; 
   retour += "]" ;
-  
-  
+    
   Serial.println(retour);
-  
   }
 
 //// recherche valeur moyenne sur 1 cycle
@@ -329,18 +303,10 @@ while ( digitalRead(sens) == 0 )
   
 }
 
-
-  server.handleClient();
-
-
-
-
-
+  server.handleClient();  /// affichage de la page web
 
 //pause de X s secondes avant prochaine mesure
-
   delay (1000*attente);
-
 }
 
 //////////  Functions ////////////////////
@@ -448,7 +414,6 @@ String getgraph(){
   page += middle ;
   page += "<br> somme " ;
   page += somme ;
-   
   page += "<br><form action='/' method='POST'>";
   page += "<ul><li>boucle : ";
   page += "<INPUT type='text' name='cycle' value='";
@@ -474,7 +439,7 @@ String getgraph(){
 }
 
 
-
+///// analyse de la requete post de la page
 void handleRoot(){
   if ( server.hasArg("cycle") || server.hasArg("middle") || server.hasArg("sending") ) {
     handleSubmit();
@@ -483,6 +448,7 @@ void handleRoot(){
   }
 }
 
+//// change les valeurs du programme en fonction du post
 void handleSubmit() {
   // Actualise les valeurs 
   String cycleValue, middleValue, sendingValue;
@@ -507,21 +473,7 @@ void handleSubmit() {
   
 }
 
-
-
-
-void drawFontFaceDemo() {
-    // Font Demo1
-    // create more fonts at http://oleddisplay.squix.ch/
-    display.setTextAlignment(TEXT_ALIGN_LEFT);
-    display.setFont(ArialMT_Plain_10);
-    display.drawString(0, 0, "Hello world");
-    display.setFont(ArialMT_Plain_16);
-    display.drawString(0, 10, "Hello world");
-    display.setFont(ArialMT_Plain_24);
-    display.drawString(0, 26, "Hello world");
-}
-
+/// affichage du logo des transmissions
 void affiche_transmission(int actif) {
  if ( actif == 1 ) { 
  display.drawXbm(111,0 , 16, 16, antenne_logo2); 
@@ -536,19 +488,23 @@ void affiche_transmission(int actif) {
 
 
 void affiche_info_main() {
+  display.clear();
+  
   display.drawXbm(0,0, 16, 16, antenne_logo);
   
   display.setTextAlignment(TEXT_ALIGN_CENTER);
   display.setFont(ArialMT_Plain_10);
-  
   display.drawString(63, 0, String(WiFi.localIP().toString()));
+  
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   ////// affichage de l'état conf
-  if ( oscillo == 1 ) {   display.drawString(0,16, "Oscillo"); }
-  if ( debug == 1 ) {   display.drawString(0,27, "Debug"); }
+  if ( oscillo == 1 ) {   display.drawString(0,16, "Oscillo");   lcd.setCursor(5, 0);  lcd.print("OSC"); }
+  if ( debug == 1 ) {   display.drawString(0,27, "Debug"); lcd.setCursor(10, 0);  lcd.print("DEBUG"); }
   if ( modeserial == 1 ) {   display.drawString(0,38, "Serial"); }
   display.drawString(75,52, VERSION );
   affiche_info_transmission(sent);
+  
+  display.display();
 }
 
 void affiche_info_injection(int injection_mode ) {
