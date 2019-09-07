@@ -9,19 +9,19 @@
 #include <ESP8266WebServer.h>
 #include <Wire.h>  // Only needed for Arduino 1.6.5 and earlier
 #include "SSD1306Wire.h" /// Oled ( https://github.com/ThingPulse/esp8266-oled-ssd1306 ) 
+#include <WiFiManager.h>  /// librairy : >> search  'wifimanager'  by tzapu
 
 // Include custom images
 #include "images.h"
 
-String VERSION = "Version 1.6" ;
+String VERSION = "Version 1.7" ;
 
-// WIFI
-const char* WIFI_SSID = "SSID";
-const char* WIFI_PWD = "Passwd";
+// WIFI Configuration 
+// At first launch, create wifi network 'pvrouteur'  ( pwd : pvrouteur ) 
 
 // configuration des infos domoticz 
 const char* domoticz_server = "domoticz IP" ;
-const String IDX  = "36" ;
+const String IDX  = "your IDX" ;
 
 WiFiClient domoticz_client;
 
@@ -29,27 +29,27 @@ WiFiClient domoticz_client;
 const int I2C_DISPLAY_ADDRESS = 0x3c;
 
 //constantes de mesure
-#define delta 100 /// zone de volume dans lequel l'IOT doit travailler ou non 
+#define delta 100 /// Trigger Zone  
 int deltaneg = 0 - delta ;
 int LCD = 0 ;
 #define OLED 1
-#define attente 1 /// nombre de seconde entre chaque cycle de mesure.
+#define attente 1 /// time between every test cycle ( in sec ) 
 int middle = 535 ; 
 int cycle = 52;
 
 //constantes de fonctionnement
 #define USE_SERIAL  Serial
 #define linky  A0
-#define lcd_scd D1  // LCD et OLED
-#define lcd_scl D2  // LCD et OLED 
+#define lcd_scd D1  // LCD OR OLED
+#define lcd_scl D2  // LCD OR OLED 
 #define sens D5   /// niveau de la diode 
-#define pinreset 1 /// si D0 et reset connecté >> 1
+#define pinreset 1 /// if D0 and reset connected >> 1
 
 /// constantes de debug 
 #define debug 0  // recherche la valeur milieu >> middle   
-int sent = 1 ;//--- coupe la transmission vers domoticz
+int sent = 1 ;//--- 1 if Send information to domoticz
 #define modeserial 0
-#define oscillo 1   /// affichage de l'oscillo sur le server web. 
+#define oscillo 1   /// Occillo mode on web page 
 
 int somme ;
 int signe = 0;
@@ -100,45 +100,21 @@ if ( LCD ==1 ) {
   display.setFont(ArialMT_Plain_10);
   display.clear();
 
+ /// start Wifi
+  WiFiManager wifiManager;
+  wifiManager.autoConnect("Pvrouteur", "pvrouteur"); 
   
-  if ( debug == 0) { 
+  
+ 
 ///// start Wifi 
 if ( LCD ==1 ) {     lcd.setCursor(2, 1); }
-
-    WiFi.begin(WIFI_SSID, WIFI_PWD);
-    while (WiFi.status() != WL_CONNECTED) {
-      if (nbtent<10){
-       nbtent++ ;   
-       delay(1000);
-       Serial.print(".");
-       lcd.print("."); 
-       
-       display.setTextAlignment(TEXT_ALIGN_CENTER);
-       display.drawString(64, 0, "Connecting"); 
-       display.drawXbm(34, 14, WiFi_Logo_width, WiFi_Logo_height, WiFi_Logo_bits);
-       display.drawXbm(46, 55, 8, 8, nbtent % 3 == 0 ? activeSymbole : inactiveSymbole);
-       display.drawXbm(60, 55, 8, 8, nbtent % 3 == 1 ? activeSymbole : inactiveSymbole);
-       display.drawXbm(74, 55, 8, 8, nbtent % 3 == 2 ? activeSymbole : inactiveSymbole);
-       display.display();
-      }
-    
-    else{
-// reboot if no network 
-      Serial.println("Reset");
-      lcd.print("reset"); 
-      if ( pinreset == 1)   { ESP.deepSleep(2 * 1000000, WAKE_RF_DEFAULT); }
-      break;  /// si reset connecté, reboot, sinon on continu sans wifi...
-      }    
-    } 
   
 // Connexion WiFi établie / WiFi connexion is OK
   Serial.println ( "" );
-  Serial.print ( "Connected to " ); Serial.println ( WIFI_SSID );
   Serial.print ( "IP address: " ); Serial.println ( WiFi.localIP() );
   lcd.setCursor(2, 1);
   lcd.print("                ");
-  }
-  
+
 // ip address on LCD display
   lcd.setCursor(2, 0);
   lcd.print("IP address:        "); 
