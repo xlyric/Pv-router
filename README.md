@@ -8,7 +8,7 @@ to redispatch the surplus power to different digital dimmer.
 
 Prerequiement : 
 A circuit board has been created and is available (tips ) 
-<img>https://nsa40.casimages.com/img/2019/09/05/190905103700235594.png</img>
+<img src="https://nsa40.casimages.com/img/2019/09/05/190905103700235594.png">
 
 the necessary components are: 
 1 SCT013
