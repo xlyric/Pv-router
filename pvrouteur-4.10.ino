@@ -2,7 +2,7 @@
 //  Pv router by Cyril Poissonnier 2019 
 //  Pv routeur pour détecter l'injection par mesure de volume et envoie d'information sur domoticz 
 //  pour réponse ( switch, dimmer ... ) 
-//  fait pour fonctionner avec le circuit imprimé v1.1
+//  fait pour fonctionner avec le circuit imprimé v1.1 à 1.3
 /////////////////////////
 #include <LiquidCrystal_I2C.h>
 #include <ESP8266WiFi.h>
@@ -10,46 +10,61 @@
 #include <Wire.h>  // Only needed for Arduino 1.6.5 and earlier
 #include "SSD1306Wire.h" /// Oled ( https://github.com/ThingPulse/esp8266-oled-ssd1306 ) 
 #include <WiFiManager.h>  /// librairy : >> search  'wifimanager'  by tzapu
+#include <ESP8266HTTPClient.h>
 
 // Include custom images
 #include "images.h"
 
-String VERSION = "Version 1.7" ;
+String VERSION = "Version 1.10" ;
 
-// WIFI Configuration 
+// WIFI
 // At first launch, create wifi network 'pvrouteur'  ( pwd : pvrouteur ) 
 
-// configuration des infos domoticz 
-const char* domoticz_server = "domoticz IP" ;
-const String IDX  = "your IDX" ;
+// IP Domotic server ( Jeedom or domoticz ) 
+char* domotic_server = "192.168.1.20" ;
 
-WiFiClient domoticz_client;
+// domoticz informations
+String IDX  = "36" ;
+const int   port     = 8080;
+
+// Jeedom Information
+
+const char* apiKey   = "My API KEY";
+const char* idrouter   = "Myidx";
+
+
+
+
+WiFiClient domotic_client;
 
 // Display Settings OLED
 const int I2C_DISPLAY_ADDRESS = 0x3c;
 
 //constantes de mesure
-#define delta 100 /// Trigger Zone  
+#define delta 100 /// zone de volume dans lequel l'IOT doit travailler ou non 
 int deltaneg = 0 - delta ;
 int LCD = 0 ;
 #define OLED 1
-#define attente 1 /// time between every test cycle ( in sec ) 
+#define attente 1 /// nombre de seconde entre chaque cycle de mesure.
 int middle = 535 ; 
 int cycle = 52;
 
 //constantes de fonctionnement
 #define USE_SERIAL  Serial
 #define linky  A0
-#define lcd_scd D1  // LCD OR OLED
-#define lcd_scl D2  // LCD OR OLED 
+#define lcd_scd D1  // LCD et OLED
+#define lcd_scl D2  // LCD et OLED 
 #define sens D5   /// niveau de la diode 
-#define pinreset 1 /// if D0 and reset connected >> 1
+#define pinreset 1 /// si D0 et reset connecté >> 1
+#define usedomoticz 1
+#define usejeedom 0
+
 
 /// constantes de debug 
 #define debug 0  // recherche la valeur milieu >> middle   
-int sent = 1 ;//--- 1 if Send information to domoticz
+int sent = 1 ;//--- coupe la transmission vers domoticz
 #define modeserial 0
-#define oscillo 1   /// Occillo mode on web page 
+#define oscillo 1   /// affichage de l'oscillo sur le server web. 
 
 int somme ;
 int signe = 0;
@@ -69,6 +84,8 @@ SSD1306Wire  display(0x3c, D1, D2);
 
 /// init Web Server 
 ESP8266WebServer server ( 80 );
+
+HTTPClient http;
   
 ///////////////////////
 
@@ -100,13 +117,11 @@ if ( LCD ==1 ) {
   display.setFont(ArialMT_Plain_10);
   display.clear();
 
- /// start Wifi
   WiFiManager wifiManager;
-  wifiManager.autoConnect("Pvrouteur", "pvrouteur"); 
+  wifiManager.autoConnect("Pvrouteur", "pvrouteur");
   
   
- 
-///// start Wifi 
+ ///// start Wifi 
 if ( LCD ==1 ) {     lcd.setCursor(2, 1); }
   
 // Connexion WiFi établie / WiFi connexion is OK
@@ -120,6 +135,7 @@ if ( LCD ==1 ) {     lcd.setCursor(2, 1); }
   lcd.print("IP address:        "); 
   lcd.setCursor(2, 1);      
   lcd.print(WiFi.localIP());
+  
  
 
     // On branche la fonction qui gère la premiere page / link to the function that manage launch page
@@ -175,7 +191,12 @@ void loop() {
   
     message = "Mode Linky        "; 
     affiche_info_injection(0);
-    if ( sent == 1) {EnvoieDomoticz(IDX,String(somme)); delay(3*attente*1000);  }
+    if ( sent == 1) {
+       if ( usedomoticz == 1 )  EnvoieDomoticz(IDX,String(somme));  
+       if ( usejeedom == 1 ) sendToJeedom(String(somme)); 
+      
+      delay(3*attente*1000); 
+      }
     
   }
 
@@ -187,7 +208,10 @@ void loop() {
     
     message = "Correc injection    ";
     affiche_info_injection(1);
-    if ( sent == 1) {EnvoieDomoticz(IDX,String(somme));  } 
+    if ( sent == 1) {
+            if ( usedomoticz == 1 )  EnvoieDomoticz(IDX,String(somme));  
+            if ( usejeedom == 1 ) sendToJeedom(String(somme)); 
+                     } 
     
   }
   
@@ -290,7 +314,7 @@ while ( digitalRead(sens) == 0 )
 ///////////fonction d'envoie vers domoticz
 
 int EnvoieDomoticz(String IDX, String Svalue) {
-  domoticz_client.connect(domoticz_server, 8080);
+  domotic_client.connect(domotic_server, port);
   affiche_transmission(1);
   delay(250);
   lcd.setCursor(0, 0); 
@@ -307,11 +331,11 @@ int EnvoieDomoticz(String IDX, String Svalue) {
       
       NbTentEnvoie++ ;
       Serial.print("_");
-      domoticz_client.println(dataInput);
+      domotic_client.println(dataInput);
       delay(1000);
       // Si le serveur repond lire toute les lignes
-      while(domoticz_client.available()){
-        String line = domoticz_client.readStringUntil('\r');
+      while(domotic_client.available()){
+        String line = domotic_client.readStringUntil('\r');
         if (line.lastIndexOf("status")>0 and line.lastIndexOf("OK")>0){
           Serial.println("Status OK");
           Resultat = 1 ;
@@ -329,8 +353,8 @@ int EnvoieDomoticz(String IDX, String Svalue) {
   }  
   // deconexion
   affiche_transmission(0);
-  domoticz_client.println("Connection: close");
-  domoticz_client.println();  
+  domotic_client.println("Connection: close");
+  domotic_client.println();  
   
   lcd.setCursor(0, 0); 
   lcd.print(" ");
@@ -397,6 +421,14 @@ String getgraph(){
   page += "'></li></ul><ul><li>moyenne: <INPUT type='text' name='middle' value='";
   page += middle;
   page += "'></li></ul>";
+  page += "<ul><li>IP : ";
+  page += "<INPUT type='text' name='IP' value='";
+  page += domotic_server;
+  page += "'></li></ul>";
+  page += "<ul><li>IDX : ";
+  page += "<INPUT type='text' name='IDX' value='";
+  page += IDX;
+  page += "'></li></ul>";
   page += "<ul><li>Envoie Domoticz (etat: ";
   page += sent;
   page += ")";
@@ -417,7 +449,7 @@ String getgraph(){
 
 ///// analyse de la requete post de la page
 void handleRoot(){
-  if ( server.hasArg("cycle") || server.hasArg("middle") || server.hasArg("sending") ) {
+  if ( server.hasArg("cycle") || server.hasArg("middle") || server.hasArg("sending") || server.hasArg("IP") || server.hasArg("IDX") ) {
     handleSubmit();
   } else {
      server.send ( 200, "text/html", getgraph() );
@@ -427,7 +459,7 @@ void handleRoot(){
 //// change les valeurs du programme en fonction du post
 void handleSubmit() {
   // Actualise les valeurs 
-  String cycleValue, middleValue, sendingValue;
+  String cycleValue, middleValue, sendingValue, IPValue, IDXValue;
   
   cycleValue = server.arg("cycle");
   if ( cycleValue.toInt() >= -1 ); {
@@ -443,6 +475,18 @@ void handleSubmit() {
   if ( sendingValue.toInt() >= -1 ); {
     sent = sendingValue.toInt();
     affiche_info_transmission(sent);
+  }
+
+    IPValue = server.arg("sending");
+  if ( IPValue != NULL ); {
+  IPValue.toCharArray(domotic_server,14);
+
+  }
+
+    IDXValue = server.arg("sending");
+  if ( IDXValue.toInt() >= -1 ); {
+    IDX = IDXValue.toInt();
+   
   }
   
   server.send ( 200, "text/html", getgraph() );
@@ -514,5 +558,28 @@ void affiche_info_transmission (int transmission ){
   if ( transmission == 0 ) {   display.drawString(0,52, "Trans Off"); }
   if ( transmission == 1 ) {   display.drawString(0,52, "Trans On"); }
   display.display();
+}
+
+
+boolean sendToJeedom(String Svalue){
+ 
+  Serial.print("connecting to ");
+  Serial.println(domotic_server);
+  Serial.print("Requesting URL: ");
+
+  String baseurl = "/core/api/jeeApi.php?apikey="; 
+  baseurl += apiKey;
+  baseurl += "&type=virtual&id="; 
+  String url = baseurl + idrouter;
+  url += url + "&value="; url += Svalue; 
+  
+  Serial.println(url);
+
+  http.begin(domotic_server,port,url);
+  int httpCode = http.GET();
+  
+  Serial.println("closing connection");
+  http.end();
+  
 }
 
