@@ -54,8 +54,8 @@ Connect the Oled Display on the connector on board ( OLED )
 
 
 <b> Use : </b>
-change your Domoticz IP and IDX on the program
-upload the program on the esp8266 and connect to the new wifi network ( pwd "pvrouteur" ) 
+change nothing on the program, make only modification on data/config.json
+upload the program on the esp8266 and connect to the new wifi network ( password can be add on file data/config.json )
 put information on your personal Wifi and reconnect. 
 
 the pv routeur will send information on your Domoticz server. 
@@ -64,12 +64,13 @@ on the Oled display, the IP is on screen.
 you can use web explorer for seen mesures and tune your pv router, 
 the oscilloscope mode is on 
 
-<img src="https://nsa40.casimages.com/img/2019/07/11/190711093838371624.png">
+by default, send to domotic server is off ( for test ) you can activate it on the web page and don't miss to save /get?save the configuration 
 
+<img src="https://nsa40.casimages.com/img/2019/07/11/190711093838371624.png">
 
 <b>Domoticz </b>
 Dimmer_heater.lua is configuration file for send to the dimmer. 
 Domoticz_pvrouter_script.lua is the main file for sending to the digital dimmer. 
 
 
-Oscilloscope mode : 
+
