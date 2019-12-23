@@ -263,14 +263,14 @@
 			</div>
 		</div>
 		
-		    <div class="col-xl-9 col-md-6 mb-4">
+		     <div class="col-xl-3 col-md-6 mb-4">
               <div class="card shadow mb-4">
                 <!-- Card Header - Dropdown -->
 				<div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-                  <h6 class="m-0 font-weight-bold text-primary">historique</h6>
+                  <h6 class="m-0 font-weight-bold text-primary">Routed Power</h6>
 				  </div>
 					<div class="card-body">
-					<div id='line_chart2' style=' width: auto; height: 200px;'>
+					<div id='curve_power' style=' width: auto; height: 200px;'>
 										
 					</div>
 					</div>
@@ -325,6 +325,24 @@
           
         };
        
+	   
+	   var optionsGaugepower = {           
+          redFrom: 37.5, 
+          redTo: 50,
+           
+          yellowFrom: 25, 
+          yellowTo: 37.5, 
+           
+          greenFrom: 0, 
+          greenTo: 25, 
+		  	  
+          minorTicks: 5,
+		  
+          min: 0, 
+          max: 50, 
+           
+          
+        };
 				  
 				 			  
 				
@@ -356,12 +374,14 @@
 	    dataGaugePA.addColumn('string', 'Sigma');
 		dataGaugePA.addColumn('number', 'Value');
 		dataGaugePA.addRows(1);
-
-<!-- mise à jour de la historique  --> 	
-		var histoPA = new google.visualization.LineChart(document.getElementById('line_chart2'));
-	    datahistoPA = new google.visualization.DataTable();
-	    datahistoPA.addColumn('number', 'time');
-		datahistoPA.addColumn('number', 'Value');
+		
+		
+		<!-- mise à jour de la jauge  --> 	
+		var gaugePApower = new google.visualization.Gauge(document.getElementById('curve_power'));
+	    dataGaugePApower = new google.visualization.DataTable();
+	    dataGaugePApower.addColumn('string', 'Power');
+		dataGaugePApower.addColumn('number', 'Value');
+		dataGaugePApower.addRows(1);
 
 
 
@@ -379,7 +399,13 @@
 		
 		dataGaugePA.setValue(0, 0, config[0]); 
 		dataGaugePA.setValue(0, 1, config[1]);
+		
+		dataGaugePApower.setValue(0, 0, "Power"); 
+		dataGaugePApower.setValue(0, 1, config[2]);
+		
 		gaugePA.draw(dataGaugePA,optionsGauge);
+		gaugePApower.draw(dataGaugePApower,optionsGaugepower);
+		
 		document.getElementById("state").innerHTML = config[0];
 		document.getElementById("sigma").innerHTML = config[1];
 		
@@ -556,7 +582,7 @@ function sendmode (mode) {
   <script src="http://pvrouter.poissonnier.net/vendor/jquery-easing/jquery.easing.min.js"></script>
 
   <!-- Custom scripts for all pages-->
-  <script src="/sb-admin-2.min.js"></script>
+  <script src="/sb-admin-2.js"></script>
  <script>
 
 

@@ -15,6 +15,9 @@
 //  la prise de donnée oscillo est définie par  /get?cycle=72 ( 72 mesures ) 
 //  ----- envoie vers serveur domotique
 //  la programmation par défaut n'envoie pas vers domoticz  ou jeedom, il faut l'activer sur l'interface et sauvegarder la configuration
+//  pour le mode autonome, il est possible de spécifier directement l'ip du dimmer numérique distant ( dans le fichier de conf ). la communication doit aussi être active pour fonctionner.
+//
+//
 // ----- sauvegarde de la configuration --- 
 //  faire un /get?save pour sauver la configuration dans le fichier
 //  sauvegarde du fichier de config : /Config.json
@@ -46,6 +49,8 @@
 // Include custom images
 #include "images.h"
 
+const String VERSION = "Version 2.1" ;
+
 //***********************************
 //************* Gestion de la configuration
 //***********************************
@@ -63,8 +68,9 @@ struct Config {
   int readtime;
   int cycle;
   bool sending;
-  
+  bool autonome;
 };
+
 const char *filename_conf = "/config.json";
 Config config; 
 
@@ -97,8 +103,8 @@ void loadConfiguration(const char *filename, Config &config) {
           doc["apiKey"] | "Myapikeystring", // <- source
           sizeof(config.apiKey));         // <- destination's capacity
 		  
-  config.UseDomoticz = doc["UseDomoticz"] | 1; 
-  config.UseJeedom = doc["UseJeedom"] | 0; 
+  config.UseDomoticz = doc["UseDomoticz"] | true; 
+  config.UseJeedom = doc["UseJeedom"] | false; 
   config.IDX = doc["IDX"] | 36; 
   
   strlcpy(config.otapassword,                  // <- destination
@@ -106,10 +112,11 @@ void loadConfiguration(const char *filename, Config &config) {
           sizeof(config.otapassword));         // <- destination's capacity
   
   config.delta = doc["delta"] | 50; 
-  config.cosphi = doc["cosphi"] | 15; 
-  config.readtime = doc["readtime"] | 408;
-  config.cycle = doc["cycle"] | 61;
-  config.sending = doc["sending"] | 0;
+  config.cosphi = doc["cosphi"] | 11; 
+  config.readtime = doc["readtime"] | 555;
+  config.cycle = doc["cycle"] | 72;
+  config.sending = doc["sending"] | false;
+  config.autonome = doc["autonome"] | true;
   configFile.close();
       
 }
@@ -145,6 +152,7 @@ void saveConfiguration(const char *filename, const Config &config) {
   doc["readtime"] = config.readtime;
   doc["cycle"] = config.cycle;
   doc["sending"] = config.sending;
+  doc["autonome"] = config.autonome;
   
 
   // Serialize JSON to file
@@ -157,33 +165,23 @@ void saveConfiguration(const char *filename, const Config &config) {
 }
 
 
-
-
-const String VERSION = "Version 2.0" ;
-const char* otapassword = "Pvrouteur2";
-
-
-WiFiClient domotic_client;
-
 //***********************************
 //************* Afficheur Oled
 //***********************************
 const int I2C_DISPLAY_ADDRESS = 0x3c;
 SSD1306Wire  display(0x3c, D1, D2);
 
-
-
 //***********************************
 //************* Constantes
 //***********************************
 //constantes de mesure
-// #define delta 75 /// zone de volume dans lequel l'IOT doit travailler ou non 
 
 #define OLED 1  // activation de l'afficheur oled
 #define attente 2 /// nombre de 1/2 secondes entre chaque cycle de mesure.
 
-int middle = 541; 
-int front_size=19 ; // ( n +1 ) 
+//int middle = 541;  /// recalculé automatiquement à chaque cycle
+int middle ;
+int front_size=19 ; // ( n +1 )  cycle d'onde de 36 mesures ( 360°/10 soit 10° d'onde par mesure ) 
 
 //constantes de fonctionnement
 #define USE_SERIAL  Serial
@@ -192,40 +190,40 @@ int front_size=19 ; // ( n +1 )
 #define lcd_scl D2  // LCD et OLED 
 #define sens D5   /// niveau de la diode 
 #define pinreset 1 /// si D0 et reset connecté >> 1
-
-
+int num_fuse = 50 ; /// limitation de la puissance du dimmer numérique à 50% 
+int dimmer_power = 0;
 
 /// constantes de debug 
-#define debug 1  // recherche la valeur milieu >> middle   
-#define modeserial 1
-#define oscillo 1   /// affichage de l'oscillo sur le server web. 
-int inversion = 0 ; 
+// #define debug 1  // recherche la valeur milieu >> middle   
+#define modeserial 0
+// #define oscillo 1   /// affichage de l'oscillo sur le server web. 
+//int inversion = 0 ; 
 int phi;
-
 int somme, sigma ;
 int signe = 0;
 int temp = 0; 
 int timer = 0 ; 
-String retour, retourbrut; 
+String retour; 
 int nbtent=0;
 int moyenne, laststartvalue; 
 String message; 
-String chart ,configweb , memory, inputMessage, dataInput;
+String configweb , memory, inputMessage;
+int inj_mode = 0 ; 
 
 //***********************************
 //************* Gestion du serveur WEB
 //***********************************
 // Create AsyncWebServer object on port 80
+WiFiClient domotic_client;
+
 AsyncWebServer server(80);
 DNSServer dns;
 HTTPClient http;
 
-String state = "Linky";
-String sendmode = "on";
+//String state = "Stabilise";
+//String sendmode = "off";
 
 
-
-int inj_mode = 0 ; 
 // creation des fonctions de collect 
 
 //***********************************
@@ -233,11 +231,12 @@ int inj_mode = 0 ;
 //***********************************
 
 String getState() {
+  String state ; 
   if ( inj_mode == 0 ) {   state = "Linky"; }
   if ( inj_mode == 1 ) {   state = "Injection"; }
   if ( inj_mode == 2 ) {   state = "Stabilise"; }
   //int sigma = somme ;
-  state = state + ";" + sigma ;
+  state = state + ";" + sigma + ";" + dimmer_power ;
   return String(state);
 }
 
@@ -248,6 +247,7 @@ const char* PARAM_INPUT_4 = "cosphi"; /// paramettre de retour cosphi
 const char* PARAM_INPUT_5 = "save"; /// paramettre de retour cosphi
 
 String getSendmode() {
+  String sendmode;
   if ( config.sending == 0 ) {   sendmode = "Off"; }
   else {   sendmode = "On"; }
   return String(sendmode);
@@ -269,7 +269,7 @@ String getchart() {
 }
 
 String getdebug() {
-  configweb = String(ESP.getFreeHeap())+ ";" + String(laststartvalue)  + ";" +  String(middle) + ";" +  String(front_size) +";"+ phi;
+  configweb = String(ESP.getFreeHeap())+ ";" + String(laststartvalue)  + ";" +  String(middle) + ";" +  String(front_size) +";"+ phi +";"+ dimmer_power;
     return String(configweb);
 }
 
@@ -452,13 +452,10 @@ server.on("/config.json", HTTP_ANY, [](AsyncWebServerRequest *request){
 ////// mise à jour parametre d'envoie vers domoticz et récupération des modifications de configurations
 server.on("/get", HTTP_ANY, [] (AsyncWebServerRequest *request) {
       ///   /get?send=on
-    if (request->hasParam(PARAM_INPUT_1)) {
-        inputMessage = request->getParam(PARAM_INPUT_1)->value();
-       config.sending = 0; 
-       if ( inputMessage != "On" ) { config.sending = 1; }
-              
-    request->send(200, "text/html", getSendmode().c_str());
-	}
+    if (request->hasParam(PARAM_INPUT_1)) 		  { inputMessage = request->getParam(PARAM_INPUT_1)->value();
+													config.sending = 0; 
+													if ( inputMessage != "On" ) { config.sending = 1; }
+													request->send(200, "text/html", getSendmode().c_str()); 	}
 	   // /get?cycle=x
 	else	if (request->hasParam(PARAM_INPUT_2)) { config.cycle = request->getParam(PARAM_INPUT_2)->value().toInt(); request->send(200, "text/html", getconfig().c_str()); }
 		// /get?readtime=x
@@ -466,8 +463,9 @@ server.on("/get", HTTP_ANY, [] (AsyncWebServerRequest *request) {
 		// /get?cosphi=x
 	else	if (request->hasParam(PARAM_INPUT_4)) { config.cosphi = request->getParam(PARAM_INPUT_4)->value().toInt(); request->send(200, "text/html", getconfig().c_str()); }
 		// /get?save
-	else	if (request->hasParam(PARAM_INPUT_5)) {   	Serial.println(F("Saving configuration..."));
-													saveConfiguration(filename_conf, config);   request->send(200, "text/html", getconfig().c_str()); }
+	else	if (request->hasParam(PARAM_INPUT_5)) { Serial.println(F("Saving configuration..."));
+													saveConfiguration(filename_conf, config);   
+													request->send(200, "text/html", getconfig().c_str()); }
 
 	});
 
@@ -494,7 +492,7 @@ const int deltaneg = 50 - config.delta ; // décalage de la sensibilité pour l'
 /// preparation des mesures
   temp = 0; 
   timer = 0 ; 
-  int dimmer = 0;
+  //int dimmer = 0;
   somme = 0; 
   int i = 0;
   int validation = 0;
@@ -549,7 +547,7 @@ const int deltaneg = 50 - config.delta ; // décalage de la sensibilité pour l'
    Serial.print("somme corrigé : ");
    Serial.println(somme); }
 
-   if ( inversion == 1 ) { somme = 0 - somme ; }
+   //if ( inversion == 1 ) { somme = 0 - somme ; }
    /// si la valeur est validée, sigma est raffraichi 
    if (validation == 1 ) { sigma = somme * 1.5 ; }
 
@@ -561,12 +559,12 @@ const int deltaneg = 50 - config.delta ; // décalage de la sensibilité pour l'
 
 // production
   if ( somme > config.delta ) {
-    dimmer = 10 ;
+    //dimmer = 10 ;
     if ( modeserial == 1 )  {Serial.println("prod"); }
   
     message = "Mode Linky        "; 
     inj_mode=0;
-    affiche_info_injection(0);
+
     if ( config.sending == 1) {
        SendToDomotic(String(somme));  
       
@@ -579,12 +577,12 @@ const int deltaneg = 50 - config.delta ; // décalage de la sensibilité pour l'
 // injection 
 //**************************
   else if ( somme < deltaneg ) {
-    dimmer = -10;
+    //dimmer = -10;
     if ( modeserial == 1 )  {Serial.println("inj"); }
     
     message = "Correc injection    ";
     inj_mode=1;
-    affiche_info_injection(1);
+    
     if ( config.sending == 1) {
             SendToDomotic(String(somme));  
             
@@ -596,16 +594,15 @@ const int deltaneg = 50 - config.delta ; // décalage de la sensibilité pour l'
   else {
 		message = "Mode stabilise    " ;
 		inj_mode=2;
-		affiche_info_injection(2);
+		
   }
-  
-
+  affiche_info_injection(inj_mode);
   affiche_info_volume(somme);
+  if (config.autonome == 1 ) {dimmer(inj_mode); }
 
   if (modeserial == 1 ){
     //////////// affichage des variables sur port série pour regler le delta.
-    Serial.print("dimmer: ");
-    Serial.println(dimmer);
+
     Serial.print("somme: ");
     Serial.println(somme);
   }
@@ -661,8 +658,8 @@ void affiche_info_main() {
   display.setTextAlignment(TEXT_ALIGN_LEFT);
 
   ////// affichage de l'état conf
-	if ( oscillo == 1 ) {   display.drawString(0,16, "Oscillo"); }
-	if ( debug == 1 ) {   display.drawString(0,27, "Debug");  }
+	// if ( oscillo == 1 ) {   display.drawString(0,16, "Oscillo"); }
+	//if ( debug == 1 ) {   display.drawString(0,27, "Debug");  }
 	if ( modeserial == 1 ) {   display.drawString(0,38, "Serial"); }
 
   display.drawString(75,52, VERSION );
@@ -745,7 +742,7 @@ void affiche_transmission(int actif) {
 //***********************************
 
 void oscilloscope() {
-if ( oscillo == 1) {
+
   int starttime,endtime; 
   timer = 0; 
 
@@ -773,7 +770,7 @@ if ( oscillo == 1) {
   retour += String(timer) + "," + String(moyenne) + "," + String(temp) + "]]" ;
  
 
-  }
+  
 }
 
 int mesure () {
@@ -874,7 +871,7 @@ boolean SendToDomotic(String Svalue){
 
   if ( config.UseDomoticz == 1 ) { baseurl = "/json.htm?type=command&param=udevice&idx="+config.IDX+"&nvalue=0&svalue="+Svalue;  }
   if ( config.UseJeedom == 1 ) {  baseurl = "/core/api/jeeApi.php?apikey=" + String(config.apiKey) + "&type=virtual&id="+ config.IDX + "&value=" + Svalue;  }
-  
+  if ( config.autonome == 1 ) {  baseurl = "/?POWER=" + String(dimmer_power) ; }
   Serial.println(baseurl);
 
   http.begin(config.hostname,config.port,baseurl);
@@ -884,4 +881,20 @@ boolean SendToDomotic(String Svalue){
   http.end();
   
 }
+
+
+//***********************************
+//************* Fonction aservicement autonome
+//***********************************
+
+void dimmer(int commande){
+	if ( sigma >= 350 ) { dimmer_power = 0 ; } // si grosse puissance instantanée sur le réseau, coupure du dimmer. ( ici 350w environ ) 
+	else if (commande == 0  ) { dimmer_power += -2 ;}  /// si mode linky  on reduit la puissance 
+	else if (commande == 1  ) { dimmer_power += 5 ;} /// si injection on augmente la puissance
+		
+if ( dimmer_power >= num_fuse ) {dimmer_power = num_fuse; }
+if ( dimmer_power <= 0 ) {dimmer_power = 0; }
+	
+}
+
 
