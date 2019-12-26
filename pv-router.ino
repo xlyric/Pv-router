@@ -658,11 +658,11 @@ void affiche_info_main() {
   display.setTextAlignment(TEXT_ALIGN_LEFT);
 
   ////// affichage de l'état conf
-	// if ( oscillo == 1 ) {   display.drawString(0,16, "Oscillo"); }
+
 	//if ( debug == 1 ) {   display.drawString(0,27, "Debug");  }
 	if ( modeserial == 1 ) {   display.drawString(0,38, "Serial"); }
 
-  display.drawString(75,52, VERSION );
+  display.drawString(0,54, VERSION );
   affiche_info_transmission(config.sending);
   
   display.display();
@@ -674,13 +674,13 @@ void affiche_info_main() {
 
 void affiche_info_transmission (int transmission ){
   display.setColor(BLACK);
-  display.fillRect(0, 52, 50, 62);
+  display.fillRect(0, 16, 50, 26);
   
   display.setColor(WHITE);
   display.setTextAlignment(TEXT_ALIGN_LEFT);
-  
-	if ( transmission == 0 ) {   display.drawString(0,52, "Trans Off"); }
-	else {   display.drawString(0,52, "Trans On "); }
+  display.setFont(ArialMT_Plain_10);
+	if ( transmission == 0 ) {   display.drawString(0,16, "Trans Off"); }
+	else {   display.drawString(0,16, "Trans On "); }
   
   display.display();
 }
@@ -691,12 +691,14 @@ void affiche_info_transmission (int transmission ){
 
 void affiche_info_volume(int volume ) {
   display.setColor(BLACK);
-  display.fillRect(40, 100, 100, 110);
+  display.fillRect(55, 30, 128, 64);
   
   display.setColor(WHITE);
   display.setTextAlignment(TEXT_ALIGN_CENTER);
-  display.setFont(ArialMT_Plain_10);
-  display.drawString(40,100, String(volume)); 
+  display.setFont(ArialMT_Plain_16);
+  display.drawString(80,30, String(volume) + " W"); 
+  display.drawString(80,47, String(dimmer_power) + " %"); 
+  
   
   display.display();
 }
@@ -707,16 +709,16 @@ void affiche_info_volume(int volume ) {
 
 void affiche_info_injection(int injection_mode ) {
   display.setColor(BLACK);
-  display.fillRect(75, 20, 128, 30);
+  display.fillRect(75, 16, 128, 26);
   
   display.setColor(WHITE);
   display.setTextAlignment(TEXT_ALIGN_CENTER);
   display.setFont(ArialMT_Plain_10);
-  display.drawString(100,20, "              ");
+  display.drawString(100,16, "              ");
   
-  if ( injection_mode == 0 ) {   display.drawString(100,20, "Linky"); }
-  else if ( injection_mode == 1 ) {   display.drawString(100,20, "Injection"); }
-  else {   display.drawString(100,20, "Stabilise"); }
+  if ( injection_mode == 0 ) {   display.drawString(100,16, "Linky"); }
+  else if ( injection_mode == 1 ) {   display.drawString(100,16, "Injection"); }
+  else {   display.drawString(100,16, "Stabilise"); }
   
   display.display();
 }
@@ -735,6 +737,7 @@ void affiche_transmission(int actif) {
   }
   display.display();
 }
+
 
 
 //***********************************
