@@ -1,1 +1,1 @@
-{"hostname":"192.168.1.20","port":8080,"apiKey":"","UseDomoticz":true,"UseJeedom":false,"IDX":"36","otapassword":"","delta":50,"cosphi":15,"readtime":408,"cycle":61,"sending":false}
+{"hostname":"192.168.1.20","port":8080,"apiKey":"","UseDomoticz":true,"UseJeedom":false,"IDX":"36","otapassword":"","delta":50,"cosphi":11,"readtime":555,"cycle":72,"sending":true,"autonome":true,"dimmer":"192.168.1.75"}

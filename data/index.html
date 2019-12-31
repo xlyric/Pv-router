@@ -29,7 +29,7 @@
     <ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion" id="accordionSidebar">
 
       <!-- Sidebar - Brand -->
-      <a class="sidebar-brand d-flex align-items-center justify-content-center" href="index.html">
+      <a class="sidebar-brand d-flex align-items-center justify-content-center" href="/">
         <div class="sidebar-brand-icon rotate-n-15">
           <i class="fas fa-laugh-wink"></i>
         </div>
@@ -59,23 +59,10 @@
       </div>
 
       <!-- Nav Item - Pages Collapse Menu -->
-      <li class="nav-item">
-        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseTwo" aria-expanded="true" aria-controls="collapseTwo">
+	  <li class="nav-item active">
+        <a class="nav-link" href="config.html">
           <i class="fas fa-fw fa-cog"></i>
-          <span>Network</span>
-        </a>
-        <div id="collapseTwo" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
-          <div class="bg-white py-2 collapse-inner rounded">
-            <h6 class="collapse-header">Network options</h6>
-			<a class="collapse-item" >Domoticz</a>
-			<span id="domoticz">%Domoticz%</span>:<span id="port">%port%</span></a> 
-		
-			
-            <a class="collapse-item" >idx :<span id="idx">%IDX%</span></a> 
-			
-			
-          </div>
-        </div>
+          <span>Configuration</span></a>
       </li>
 
     <!-- Divider -->
@@ -143,16 +130,7 @@
               </a>
               <!-- Dropdown - Messages -->
               <div class="dropdown-menu dropdown-menu-right p-3 shadow animated--grow-in" aria-labelledby="searchDropdown">
-                <form class="form-inline mr-auto w-100 navbar-search">
-                  <div class="input-group">
-                    <input type="text" class="form-control bg-light border-0 small" placeholder="Search for..." aria-label="Search" aria-describedby="basic-addon2">
-                    <div class="input-group-append">
-                      <button class="btn btn-primary" type="button">
-                        <i class="fas fa-search fa-sm"></i>
-                      </button>
-                    </div>
-                  </div>
-                </form>
+
               </div>
             </li>
 
@@ -308,19 +286,19 @@
 				  function drawChart() {    
 
 					var optionsGauge = {           
-          redFrom: -200, 
+          redFrom: -100, 
           redTo: -25,
            
-          yellowFrom: 100, 
-          yellowTo: 200, 
+          yellowFrom: 50, 
+          yellowTo: 400, 
            
           greenFrom: -50, 
           greenTo: 50, 
 		  	  
           minorTicks: 4,
 		  
-          min: -200, 
-          max: 200, 
+          min: -100, 
+          max: 400, 
            
           
         };
@@ -531,7 +509,28 @@ function sendmode (mode) {
                 <div class="collapse " id="collapserawdata">
                   <div class="card-body">
                     <div id='rawdata' style=' width: auto; height: 500px;'>
+					
                   </div>
+				  test
+					<form action="javascript:alert( 'success!' );">
+  <div>
+    <input type="text">
+    <input type="submit">
+  </div>
+</form>
+<script src="https://code.jquery.com/jquery-3.4.1.js"></script>
+<script>
+$( "form" ).submit(function( event ) {
+  if ( $( "input" ).first().val() === "correct" ) {
+    $( "span" ).text( "Validated..." ).show();
+    return;
+  }
+ 
+  $( "span" ).text( "Not valid!" ).show().fadeOut( 1000 );
+  event.preventDefault();
+});
+</script>
+<span></span>
                   </div>
                 </div>
             </div>

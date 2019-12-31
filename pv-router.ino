@@ -69,6 +69,7 @@ struct Config {
   int cycle;
   bool sending;
   bool autonome;
+  char dimmer[15];
 };
 
 const char *filename_conf = "/config.json";
@@ -117,6 +118,9 @@ void loadConfiguration(const char *filename, Config &config) {
   config.cycle = doc["cycle"] | 72;
   config.sending = doc["sending"] | false;
   config.autonome = doc["autonome"] | true;
+  strlcpy(config.dimmer,                  // <- destination
+          doc["dimmer"] | "192.168.1.20", // <- source
+          sizeof(config.dimmer));         // <- destination's capacity
   configFile.close();
       
 }
@@ -153,6 +157,7 @@ void saveConfiguration(const char *filename, const Config &config) {
   doc["cycle"] = config.cycle;
   doc["sending"] = config.sending;
   doc["autonome"] = config.autonome;
+  doc["dimmer"] = config.dimmer;
   
 
   // Serialize JSON to file
@@ -209,6 +214,8 @@ int moyenne, laststartvalue;
 String message; 
 String configweb , memory, inputMessage;
 int inj_mode = 0 ; 
+int RMS = 0 ;
+bool change;
 
 //***********************************
 //************* Gestion du serveur WEB
@@ -244,7 +251,18 @@ const char* PARAM_INPUT_1 = "send"; /// paramettre de retour sendmode
 const char* PARAM_INPUT_2 = "cycle"; /// paramettre de retour cycle
 const char* PARAM_INPUT_3 = "readtime"; /// paramettre de retour readtime
 const char* PARAM_INPUT_4 = "cosphi"; /// paramettre de retour cosphi
-const char* PARAM_INPUT_5 = "save"; /// paramettre de retour cosphi
+const char* PARAM_INPUT_save = "save"; /// paramettre de retour cosphi
+const char* PARAM_INPUT_dimmer = "dimmer"; /// paramettre de retour cosphi
+const char* PARAM_INPUT_server = "server"; /// paramettre de retour cosphi
+const char* PARAM_INPUT_delta = "save"; /// paramettre de retour cosphi
+const char* PARAM_INPUT_IDX = "idx"; /// paramettre de retour cosphi
+
+String stringbool(bool mybool){
+  String truefalse = "true";
+  if (mybool == false ) {truefalse = "";}
+  return String(truefalse);
+  }
+
 
 String getSendmode() {
   String sendmode;
@@ -259,7 +277,8 @@ String getSigma() {
 }
 
 String getconfig() {
-  configweb = String(config.hostname) + ";" +  config.port + ";"  + config.IDX + ";"  +  VERSION +";" + middle +";"+ config.delta +";"+config.cycle ;
+    
+  configweb = String(config.hostname) + ";" +  config.port + ";"  + config.IDX + ";"  +  VERSION +";" + middle +";"+ config.delta +";"+config.cycle+";"+config.dimmer+";"+config.cosphi+";"+config.readtime +";"+stringbool(config.UseDomoticz)+";"+stringbool(config.UseJeedom)+";"+stringbool(config.autonome)+";"+config.apiKey;
   return String(configweb);
 }
 
@@ -269,7 +288,7 @@ String getchart() {
 }
 
 String getdebug() {
-  configweb = String(ESP.getFreeHeap())+ ";" + String(laststartvalue)  + ";" +  String(middle) + ";" +  String(front_size) +";"+ phi +";"+ dimmer_power;
+  configweb = String(ESP.getFreeHeap())+ ";" + String(laststartvalue)  + ";" +  String(middle) + ";" +  String(front_size) +";"+ phi +";"+ dimmer_power + ";"+ RMS;
     return String(configweb);
 }
 
@@ -292,17 +311,45 @@ String processor(const String& var){
     
     return getState();
   }  
- /*  else if (var == "Domoticz"){
+ /* else if (var == "HOSTNAME"){
     
     return String(config.hostname);
   }
-  else if (var == "config.IDX"){
+  else if (var == "IDX"){
     
-    return config.IDX;
+    return String(config.IDX);
   }
-  else if (var == "config.port"){
+  else if (var == "PORT"){
     
-    return config.port;
+    return String(config.port);
+  } 
+  else if (var == "APIKEY"){
+    
+    return String(config.apiKey);
+  }
+  else if (var == "PORT"){
+    
+    return String(config.port);
+  } 
+    else if (var == "DIMMER"){
+    
+    return String(config.dimmer);
+  }
+  else if (var == "DELTA"){
+    
+    return String(config.delta);
+  }
+      else if (var == "COSPHI"){
+    
+    return String(config.cosphi);
+  }
+  else if (var == "READTIME"){
+    
+    return String(config.readtime);
+  }
+    else if (var == "CYCLE"){
+    
+    return String(config.cycle);
   } */
   
 }
@@ -399,6 +446,10 @@ void setup() {
     request->send(SPIFFS, "/index.html", String(), false, processor);
   });
 
+    server.on("/config.html",HTTP_ANY, [](AsyncWebServerRequest *request){
+    request->send(SPIFFS, "/config.html", String(), false, processor);
+  });
+
   server.on("/all.min.css", HTTP_ANY, [](AsyncWebServerRequest *request){
     request->send(SPIFFS, "/all.min.css", "text/css");
   });
@@ -448,8 +499,10 @@ server.on("/config.json", HTTP_ANY, [](AsyncWebServerRequest *request){
   });
 
 
-
+/////////////////////////
 ////// mise à jour parametre d'envoie vers domoticz et récupération des modifications de configurations
+/////////////////////////
+
 server.on("/get", HTTP_ANY, [] (AsyncWebServerRequest *request) {
       ///   /get?send=on
     if (request->hasParam(PARAM_INPUT_1)) 		  { inputMessage = request->getParam(PARAM_INPUT_1)->value();
@@ -457,15 +510,16 @@ server.on("/get", HTTP_ANY, [] (AsyncWebServerRequest *request) {
 													if ( inputMessage != "On" ) { config.sending = 1; }
 													request->send(200, "text/html", getSendmode().c_str()); 	}
 	   // /get?cycle=x
-	else	if (request->hasParam(PARAM_INPUT_2)) { config.cycle = request->getParam(PARAM_INPUT_2)->value().toInt(); request->send(200, "text/html", getconfig().c_str()); }
-		// /get?readtime=x
-	else 	if (request->hasParam(PARAM_INPUT_3)) { config.readtime = request->getParam(PARAM_INPUT_3)->value().toInt(); request->send(200, "text/html", getconfig().c_str());}
-		// /get?cosphi=x
-	else	if (request->hasParam(PARAM_INPUT_4)) { config.cosphi = request->getParam(PARAM_INPUT_4)->value().toInt(); request->send(200, "text/html", getconfig().c_str()); }
-		// /get?save
-	else	if (request->hasParam(PARAM_INPUT_5)) { Serial.println(F("Saving configuration..."));
+	if (request->hasParam(PARAM_INPUT_2)) { config.cycle = request->getParam(PARAM_INPUT_2)->value().toInt(); request->send(200, "text/html", getconfig().c_str()); }
+	if (request->hasParam(PARAM_INPUT_3)) { config.readtime = request->getParam(PARAM_INPUT_3)->value().toInt(); request->send(200, "text/html", getconfig().c_str());}
+	if (request->hasParam(PARAM_INPUT_4)) { config.cosphi = request->getParam(PARAM_INPUT_4)->value().toInt(); request->send(200, "text/html", getconfig().c_str()); }
+  if (request->hasParam(PARAM_INPUT_dimmer)) { request->getParam(PARAM_INPUT_dimmer)->value().toCharArray(config.dimmer,15); request->send(200, "text/html", getconfig().c_str()); }
+  if (request->hasParam(PARAM_INPUT_server)) { request->getParam(PARAM_INPUT_server)->value().toCharArray(config.hostname,15); request->send(200, "text/html", getconfig().c_str()); }
+  if (request->hasParam(PARAM_INPUT_delta)) { config.delta = request->getParam(PARAM_INPUT_delta)->value().toInt(); request->send(200, "text/html", getconfig().c_str()); }
+  if (request->hasParam(PARAM_INPUT_IDX)) { config.IDX = request->getParam(PARAM_INPUT_IDX)->value().toInt(); request->send(200, "text/html", getconfig().c_str()); }
+	if (request->hasParam(PARAM_INPUT_save)) { Serial.println(F("Saving configuration..."));
 													saveConfiguration(filename_conf, config);   
-													request->send(200, "text/html", getconfig().c_str()); }
+													 request->send(SPIFFS, "/config.json", "application/json"); }
 
 	});
 
@@ -496,6 +550,7 @@ const int deltaneg = 50 - config.delta ; // décalage de la sensibilité pour l'
   somme = 0; 
   int i = 0;
   int validation = 0;
+
 // lecture de la valeur moyenne 
    middle = valeur_moyenne() ;
 
@@ -565,11 +620,11 @@ const int deltaneg = 50 - config.delta ; // décalage de la sensibilité pour l'
     message = "Mode Linky        "; 
     inj_mode=0;
 
-    if ( config.sending == 1) {
-       SendToDomotic(String(somme));  
+    if ( config.sending == 1 ) {
+       SendToDomotic(String(sigma));  
+    
       
-      
-      delay(5*attente*1000); 
+       delay(5*attente*1000); 
     }
   }
   
@@ -584,7 +639,7 @@ const int deltaneg = 50 - config.delta ; // décalage de la sensibilité pour l'
     inj_mode=1;
     
     if ( config.sending == 1) {
-            SendToDomotic(String(somme));  
+            SendToDomotic(String(sigma));  
             
             delay(5*attente*1000); 
     
@@ -597,7 +652,7 @@ const int deltaneg = 50 - config.delta ; // décalage de la sensibilité pour l'
 		
   }
   affiche_info_injection(inj_mode);
-  affiche_info_volume(somme);
+  affiche_info_volume(sigma);
   if (config.autonome == 1 ) {dimmer(inj_mode); }
 
   if (modeserial == 1 ){
@@ -630,8 +685,10 @@ affiche_info_transmission(config.sending);
 // ** recherche de changement sur la diode.
 // ***********************************
 void front(int variation) {
+
 	while ( digitalRead(sens) == variation ) {
 	delayMicroseconds (25);
+
 	}
   
 }
@@ -776,9 +833,14 @@ void oscilloscope() {
   
 }
 
+//***********************************
+//************* Fonction mesure
+//***********************************
+
 int mesure () {
   temp = 0,
   timer = 0; 
+  //RMS = 0; 
   int startvalue = 0; 
   somme = 0; 
   front(0);
@@ -799,6 +861,7 @@ int mesure () {
   {
     temp =  analogRead(linky); signe = digitalRead(sens);
     //if ( signe == 0 ) {
+  //   RMS = RMS + abs(temp - middle) ; 
       somme = somme + temp - middle ;
       if (timer ==0) {startvalue = temp; }
     // }
@@ -812,6 +875,9 @@ int mesure () {
 }
 
 
+//***********************************
+//************* Fonction valeur moyenne 
+//***********************************
 int valeur_moyenne() {
 
 int temp, moyenne, count = 0; 
@@ -843,6 +909,7 @@ while ( digitalRead(sens) == 0 )
  return (moyenne);
 }
 
+////////////////////
 int cycle_phi() {
 
 int count = 0; 
@@ -853,7 +920,7 @@ int count = 0;
 while ( digitalRead(sens) == 1 )
   {
     temp =  analogRead(linky); 
-    if ( temp < moyenne ) {
+    if ( temp > moyenne ) {
     delayMicroseconds (config.readtime);
     count ++;  }
   } 
@@ -872,17 +939,17 @@ boolean SendToDomotic(String Svalue){
   Serial.println(config.hostname);
   Serial.print("Requesting URL: ");
 
-  if ( config.UseDomoticz == 1 ) { baseurl = "/json.htm?type=command&param=udevice&idx="+config.IDX+"&nvalue=0&svalue="+Svalue;  }
-  if ( config.UseJeedom == 1 ) {  baseurl = "/core/api/jeeApi.php?apikey=" + String(config.apiKey) + "&type=virtual&id="+ config.IDX + "&value=" + Svalue;  }
-  if ( config.autonome == 1 ) {  baseurl = "/?POWER=" + String(dimmer_power) ; }
+  if ( config.UseDomoticz == 1 ) { baseurl = "/json.htm?type=command&param=udevice&idx="+config.IDX+"&nvalue=0&svalue="+Svalue;  http.begin(config.hostname,config.port,baseurl); }
+  if ( config.UseJeedom == 1 ) {  baseurl = "/core/api/jeeApi.php?apikey=" + String(config.apiKey) + "&type=virtual&id="+ config.IDX + "&value=" + Svalue; http.begin(config.hostname,config.port,baseurl);  }
   Serial.println(baseurl);
 
-  http.begin(config.hostname,config.port,baseurl);
+  // http.begin(config.hostname,config.port,baseurl);
   int httpCode = http.GET();
-  
   Serial.println("closing connection");
   http.end();
-  
+
+  if ( config.autonome == 1 && change == 1   ) {  baseurl = "/?POWER=" + String(dimmer_power) ; http.begin(config.dimmer,80,baseurl);   int httpCode = http.GET();
+  http.end(); }
 }
 
 
@@ -891,12 +958,13 @@ boolean SendToDomotic(String Svalue){
 //***********************************
 
 void dimmer(int commande){
-	if ( sigma >= 350 ) { dimmer_power = 0 ; } // si grosse puissance instantanée sur le réseau, coupure du dimmer. ( ici 350w environ ) 
-	else if (commande == 0  ) { dimmer_power += -2 ;}  /// si mode linky  on reduit la puissance 
-	else if (commande == 1  ) { dimmer_power += 5 ;} /// si injection on augmente la puissance
+  change = 0; 
+	if ( sigma >= 350 ) { dimmer_power = 0 ;  change = 1 ;} // si grosse puissance instantanée sur le réseau, coupure du dimmer. ( ici 350w environ ) 
+	else if (commande == 0  ) { dimmer_power += -2 ; change = 1; }  /// si mode linky  on reduit la puissance 
+	else if (commande == 1  ) { dimmer_power += 5 ; change = 1 ; } /// si injection on augmente la puissance
 		
-if ( dimmer_power >= num_fuse ) {dimmer_power = num_fuse; }
-if ( dimmer_power <= 0 ) {dimmer_power = 0; }
+if ( dimmer_power >= num_fuse ) {dimmer_power = num_fuse; change = 1 ; }
+if ( dimmer_power <= 0 ) {dimmer_power = 0; change = 1 ; }
 	
 }
 
