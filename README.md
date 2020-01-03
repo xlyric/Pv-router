@@ -80,6 +80,10 @@ configure the config.json file for activate domoticz mode ( "UseDomoticz":true )
 configure the config.json file for activate autonome mode ( "autonome":true ) and change the server IP
 the program will try to equilibrate power in the external numeric dimmer ( https://github.com/xlyric/Domoticz-control-with-esp8266-for-Robotdyn-AC-Light-dimmer-Module)
 
+the full documentation is in the file Documentation.pdf ( in French ) 
+
+bin files are added for easy installation. 
+
 
 
 
