@@ -83,8 +83,6 @@ the program will try to equilibrate power in the external numeric dimmer ( https
 the full documentation is in the file Documentation.pdf ( in French ) 
 
 bin files are added for easy installation. 
-
-
-
+python ~/esptool.py --port /dev/ttyUSB4 --baud 115200 write_flash 0x00000 file.bin
 
 
