@@ -247,21 +247,21 @@
 				<div class="form-group">
                       <div class="custom-control custom-checkbox small">
                         <input type="checkbox" class="custom-control-input" id="UseDomoticz">
-                        <label class="custom-control-label" for="UseDomoticz">Domoticz</label>
+                        <label class="custom-control-label" for="UseDomoticz" onclick="sendservermode(this.innerHTML);" >Domoticz</label>
                       </div>
                 </div>
 
 				<div class="form-group">
                       <div class="custom-control custom-checkbox small">
 						<input type="checkbox" class="custom-control-input" id="UseJeedom">
-                        <label class="custom-control-label" for="UseJeedom">Jeedom</label>
+                        <label class="custom-control-label" for="UseJeedom" onclick="sendservermode(this.innerHTML);">Jeedom</label>
                       </div>
                 </div>
 
 				<div class="form-group">
                       <div class="custom-control custom-checkbox small">
 						<input type="checkbox" class="custom-control-input" id="autonome">
-                        <label class="custom-control-label" for="autonome">autonome</label>
+                        <label class="custom-control-label" for="autonome" onclick="sendservermode(this.innerHTML);" >autonome</label>
                       </div>
                 </div>
 
@@ -344,6 +344,22 @@ function sendmode (mode) {
 
 }
 
+function sendservermode (mode) {
+
+		$.get( "/get", { servermode: mode } )
+		.done(function(data) { 
+		$( "#saveform" ).text( "Configuration appliqué" ).show().fadeOut( 5000 );
+		var config = data.split(";");
+		document.getElementById("autonome").value = config[12];
+		document.getElementById("UseDomoticz").value = config[10];
+		document.getElementById("UseJeedom").value = config[11];
+		
+		}); 
+
+
+}
+
+
 function save () {				  
   		$.get( "/get", { save: "yes" } )
 		.done(function(data) {
@@ -424,6 +440,7 @@ var recupconfig = $.get ({
 		
 
 	
+
 
 
 </script>

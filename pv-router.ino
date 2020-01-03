@@ -258,6 +258,8 @@ const char* PARAM_INPUT_IDX = "idx"; /// paramettre de retour idx
 const char* PARAM_INPUT_port = "port"; /// paramettre de retour port server domotique
 const char* PARAM_INPUT_delta = "delta"; /// paramettre retour delta
 const char* PARAM_INPUT_API = "apiKey"; /// paramettre de retour apiKey
+const char* PARAM_INPUT_servermode = "servermode"; /// paramettre de retour activation de mode server
+
 
 String stringbool(bool mybool){
   String truefalse = "true";
@@ -265,12 +267,19 @@ String stringbool(bool mybool){
   return String(truefalse);
   }
 
-
 String getSendmode() {
   String sendmode;
   if ( config.sending == 0 ) {   sendmode = "Off"; }
   else {   sendmode = "On"; }
   return String(sendmode);
+}
+
+String getServermode(String Servermode) {
+  if ( Servermode == "Domoticz" ) {   config.UseDomoticz = !config.UseDomoticz; }
+  if ( Servermode == "Jeedom" ) {   config.UseJeedom = !config.UseJeedom;}
+  if ( Servermode == "autonome" ) {   config.autonome = !config.autonome; }
+
+return String(Servermode);
 }
 
 String getSigma() {
@@ -526,6 +535,12 @@ server.on("/get", HTTP_ANY, [] (AsyncWebServerRequest *request) {
    if (request->hasParam(PARAM_INPUT_IDX)) { config.IDX = request->getParam(PARAM_INPUT_IDX)->value().toInt();}
    if (request->hasParam(PARAM_INPUT_API)) { request->getParam(PARAM_INPUT_API)->value().toCharArray(config.apiKey,64);}
    
+   if (request->hasParam(PARAM_INPUT_servermode)) { inputMessage = request->getParam( PARAM_INPUT_servermode)->value();
+                                            getServermode(inputMessage);
+                                            request->send(200, "text/html", getconfig().c_str());
+                                        }
+
+  
     request->send(200, "text/html", getconfig().c_str());
 
 	});
