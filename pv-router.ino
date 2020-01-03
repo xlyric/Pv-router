@@ -253,9 +253,11 @@ const char* PARAM_INPUT_3 = "readtime"; /// paramettre de retour readtime
 const char* PARAM_INPUT_4 = "cosphi"; /// paramettre de retour cosphi
 const char* PARAM_INPUT_save = "save"; /// paramettre de retour cosphi
 const char* PARAM_INPUT_dimmer = "dimmer"; /// paramettre de retour cosphi
-const char* PARAM_INPUT_server = "server"; /// paramettre de retour cosphi
-const char* PARAM_INPUT_delta = "save"; /// paramettre de retour cosphi
-const char* PARAM_INPUT_IDX = "idx"; /// paramettre de retour cosphi
+const char* PARAM_INPUT_server = "server"; /// paramettre de retour server domotique
+const char* PARAM_INPUT_IDX = "idx"; /// paramettre de retour idx
+const char* PARAM_INPUT_port = "port"; /// paramettre de retour port server domotique
+const char* PARAM_INPUT_delta = "delta"; /// paramettre retour delta
+const char* PARAM_INPUT_API = "apiKey"; /// paramettre de retour apiKey
 
 String stringbool(bool mybool){
   String truefalse = "true";
@@ -510,16 +512,21 @@ server.on("/get", HTTP_ANY, [] (AsyncWebServerRequest *request) {
 													if ( inputMessage != "On" ) { config.sending = 1; }
 													request->send(200, "text/html", getSendmode().c_str()); 	}
 	   // /get?cycle=x
-	if (request->hasParam(PARAM_INPUT_2)) { config.cycle = request->getParam(PARAM_INPUT_2)->value().toInt(); request->send(200, "text/html", getconfig().c_str()); }
-	if (request->hasParam(PARAM_INPUT_3)) { config.readtime = request->getParam(PARAM_INPUT_3)->value().toInt(); request->send(200, "text/html", getconfig().c_str());}
-	if (request->hasParam(PARAM_INPUT_4)) { config.cosphi = request->getParam(PARAM_INPUT_4)->value().toInt(); request->send(200, "text/html", getconfig().c_str()); }
-  if (request->hasParam(PARAM_INPUT_dimmer)) { request->getParam(PARAM_INPUT_dimmer)->value().toCharArray(config.dimmer,15); request->send(200, "text/html", getconfig().c_str()); }
-  if (request->hasParam(PARAM_INPUT_server)) { request->getParam(PARAM_INPUT_server)->value().toCharArray(config.hostname,15); request->send(200, "text/html", getconfig().c_str()); }
-  if (request->hasParam(PARAM_INPUT_delta)) { config.delta = request->getParam(PARAM_INPUT_delta)->value().toInt(); request->send(200, "text/html", getconfig().c_str()); }
-  if (request->hasParam(PARAM_INPUT_IDX)) { config.IDX = request->getParam(PARAM_INPUT_IDX)->value().toInt(); request->send(200, "text/html", getconfig().c_str()); }
-	if (request->hasParam(PARAM_INPUT_save)) { Serial.println(F("Saving configuration..."));
-													saveConfiguration(filename_conf, config);   
-													 request->send(SPIFFS, "/config.json", "application/json"); }
+    if (request->hasParam(PARAM_INPUT_save)) { Serial.println(F("Saving configuration..."));
+                          saveConfiguration(filename_conf, config);   
+                            }
+                           
+	 if (request->hasParam(PARAM_INPUT_2)) { config.cycle = request->getParam(PARAM_INPUT_2)->value().toInt(); }
+	 if (request->hasParam(PARAM_INPUT_3)) { config.readtime = request->getParam(PARAM_INPUT_3)->value().toInt();}
+	 if (request->hasParam(PARAM_INPUT_4)) { config.cosphi = request->getParam(PARAM_INPUT_4)->value().toInt();  }
+   if (request->hasParam(PARAM_INPUT_dimmer)) { request->getParam(PARAM_INPUT_dimmer)->value().toCharArray(config.dimmer,15);  }
+   if (request->hasParam(PARAM_INPUT_server)) { request->getParam(PARAM_INPUT_server)->value().toCharArray(config.hostname,15);  }
+   if (request->hasParam(PARAM_INPUT_delta)) { config.delta = request->getParam(PARAM_INPUT_delta)->value().toInt(); }
+   if (request->hasParam(PARAM_INPUT_port)) { config.port = request->getParam(PARAM_INPUT_port)->value().toInt(); }
+   if (request->hasParam(PARAM_INPUT_IDX)) { config.IDX = request->getParam(PARAM_INPUT_IDX)->value().toInt();}
+   if (request->hasParam(PARAM_INPUT_API)) { request->getParam(PARAM_INPUT_API)->value().toCharArray(config.apiKey,64);}
+   
+    request->send(200, "text/html", getconfig().c_str());
 
 	});
 

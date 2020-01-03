@@ -85,4 +85,12 @@ the full documentation is in the file Documentation.pdf ( in French )
 bin files are added for easy installation. 
 python ~/esptool.py --port /dev/ttyUSB4 --baud 115200 write_flash 0x00000 file.bin
 
+OTA update 
+https://steve.fi/Hardware/ota-upload/
+https://github.com/esp8266/Arduino/blob/master/tools/espota.py
+python espota.py -d  -i 10.0.0.106 -f file.bin
+
+
+
+
 
