@@ -211,12 +211,13 @@
               <div class="card position-relative">
                 <div class="card-header py-3">
                   <h6 class="m-0 font-weight-bold text-primary">Configuration</h6>
+				  <span id="saveform"></span>
                 </div>
                 <div class="card-body">
                   <div class="col-lg-12">
             <div class="p-5">
 
-              <form class="user" id="formulaire">
+              <form class="user" id="formulaire" method="post" action=""  >
 			    <div class="form-group row">
 			  	<div class="col-sm-6" >Serveur</div>
 				 <div class="col-sm-3">Port</div>
@@ -237,7 +238,7 @@
 				</div>
 
                 <div class="form-group">
-                 APIKey : <input type="email" class="form-control form-control-user" id="apiKey" placeholder="%APIKEY%">
+                 APIKey : <input type="text" class="form-control form-control-user" id="apiKey" placeholder="%APIKEY%">
                 </div>
 				<div class="form-group">
                  Dimmer :<input type="text" class="form-control form-control-user" id="dimmer" placeholder="%DIMMER%">
@@ -287,13 +288,17 @@
                   </div>
 
                 </div>
-                <a href="#" class="btn btn-primary btn-user btn-block">
-                  Application des parametres
-                </a>
-				<span id="saveform"></span>
+				<input type="submit" value=" Application des parametres" class="btn btn-primary btn-user btn-block">
+				
                 <hr>
 
               </form>
+
+
+
+
+
+
               <hr>
             </div>
           </div>
@@ -369,27 +374,27 @@ $( "#save" ).click(function() {
 
 });
 
-
 $( "#formulaire" ).submit(function() {
 
-	var myForm = document.getElementById('#formulaire');
-	formData = new FormData(myForm);
-  
-	
-		$.ajax({
-		url: '/get',
-		data: formData,
-		processData: false,
-		contentType: false,
-		type: 'GET',
-		success: function(data){
-		$( "#saveform" ).text( "Configuration appliqué" ).show().fadeOut( 5000 );
-  }
+	 var data = {'server':$('#hostname').val(), 'idx':$('#IDX').val(),	 'cosphi':$('#cosphi').val(), 'readtime':$('#readtime').val()	, 'cycle':$('#cycle').val(), 'dimmer':$('#dimmer').val(),'port':$('#port').val(), 'delta':$('#delta').val(),  'apiKey':$('#apiKey').val() } 
+
+
+		
+		
+        $.ajax({
+            type: "GET",
+            data: data,
+            url: "get",
+
+            success: function(retour){
+                $( "#saveform" ).text( "Configuration appliqué" ).show().fadeOut( 5000 );
+                     
+            }
+        });
+  return false;
 });
 
 
-
-});
 
 
 var recupconfig = $.get ({
@@ -400,7 +405,7 @@ var recupconfig = $.get ({
 				  
         var config = recupconfig.split(";");
 
-		document.getElementById("hostname").placeholder = config[0];
+		document.getElementById("hostname").value = config[0];
 		document.getElementById("port").value = config[1];	  
 		document.getElementById("IDX").value = config[2];
 		document.getElementById("version").innerHTML = config[3];
@@ -412,10 +417,13 @@ var recupconfig = $.get ({
 		document.getElementById("UseDomoticz").checked = config[10];
 		document.getElementById("UseJeedom").checked = config[11];
 		document.getElementById("autonome").checked = config[12];
+		document.getElementById("UseDomoticz").value = config[10];
+		document.getElementById("UseJeedom").value = config[11];
+		document.getElementById("autonome").value = config[12];
 		document.getElementById("apiKey").value = config[13];
 		
-		
-		
+
+	
 
 
 </script>
