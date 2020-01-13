@@ -775,8 +775,8 @@ void affiche_info_volume(int volume ) {
   display.setColor(WHITE);
   display.setTextAlignment(TEXT_ALIGN_CENTER);
   display.setFont(ArialMT_Plain_16);
-  display.drawString(80,30, String(volume) + " W"); 
-  display.drawString(80,47, String(dimmer_power) + " %"); 
+  display.drawString(85,30, String(volume) + " W"); 
+  display.drawString(85,47, String(dimmer_power) + " %"); 
   
   
   display.display();
