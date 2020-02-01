@@ -57,7 +57,7 @@ Connect the Oled Display on the connector on board ( OLED )
 
 
 # Use : 
-change nothing on the program, make only modification on data/config.json if needed
+change nothing on the program, make only modification on data/config.json if needed or upload the 2 bin files ( code and spiffs )
 upload the program on the esp8266 and connect to the new wifi network ( password for OTA can be add on file data/config.json ) put information on your personal Wifi and reconnect. 
 
 the pv routeur will send information on your Domoticz server. 
@@ -84,6 +84,13 @@ the full documentation is in the file Documentation.pdf ( in French )
 
 bin files are added for easy installation. 
 python ~/esptool.py --port /dev/ttyUSB4 --baud 115200 write_flash 0x00000 file.bin
+and for SPIFFS python ~/esptool.py --port /dev/ttyUSB4 --baud 115200 write_flash 0x200000 file.bin
+
+and for windows : 
+esptool.py --port com3 --baud 256000 write_flash 0x00000 pvrouter.nodemcu.bin 
+esptool.py --port com3 --baud 256000 write_flash 0x00200000 spiffs.img 
+
+Wifiautoconnect password : pvrouter 
 
 OTA update 
 https://steve.fi/Hardware/ota-upload/
