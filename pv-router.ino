@@ -23,13 +23,31 @@
 //  sauvegarde du fichier de config : /Config.json
 //  
 /////////////////////////
-
+/**************
+ *  numeric Dimmer  Information 
+ *  **************
+ *  
+ *  ---------------------- OUTPUT & INPUT Pin table ---------------------
+ *  +---------------+-------------------------+-------------------------+
+ *  |   Board       | INPUT Pin               | OUTPUT Pin              |
+ *  |               | Zero-Cross              |                         |
+ *  +---------------+-------------------------+-------------------------+
+ *  | ESP8266       | D1(IO5),    D2(IO4),    | D0(IO16),   D1(IO5),    |
+ *  |               | D5(IO14),   D6(IO12),   | D2(IO4),    D5(IO14),   |
+ *  |               | D7(IO13),   D8(IO15),   | D6(IO12),   D7(IO13),   |
+ *  |               |                         | D8(IO15)                |
+ *  +---------------+-------------------------+-------------------------+
+ */
 
 
 //***********************************
 //************* Déclaration des libraries
 //***********************************
 
+// time librairy 
+#include <NTPClient.h>
+// Dimmer librairy 
+#include <RBDdimmer.h>   /// the corrected librairy  in RBDDimmer-master-corrected.rar , the original has a bug
 // Web services
 #include <ESP8266WiFi.h>
 #include <ESPAsyncWiFiManager.h>    
@@ -49,7 +67,7 @@
 // Include custom images
 #include "images.h"
 
-const String VERSION = "Version 2.1" ;
+const String VERSION = "Version 2.2" ;
 
 //***********************************
 //************* Gestion de la configuration
@@ -70,6 +88,7 @@ struct Config {
   bool sending;
   bool autonome;
   char dimmer[15];
+  bool dimmerlocal;
 };
 
 const char *filename_conf = "/config.json";
@@ -118,6 +137,7 @@ void loadConfiguration(const char *filename, Config &config) {
   config.cycle = doc["cycle"] | 72;
   config.sending = doc["sending"] | false;
   config.autonome = doc["autonome"] | true;
+  config.dimmerlocal = doc["dimmerlocal"] | false;
   strlcpy(config.dimmer,                  // <- destination
           doc["dimmer"] | "192.168.1.20", // <- source
           sizeof(config.dimmer));         // <- destination's capacity
@@ -158,7 +178,7 @@ void saveConfiguration(const char *filename, const Config &config) {
   doc["sending"] = config.sending;
   doc["autonome"] = config.autonome;
   doc["dimmer"] = config.dimmer;
-  
+  doc["dimmerlocal"] = config.dimmerlocal;
 
   // Serialize JSON to file
   if (serializeJson(doc, configFile) == 0) {
@@ -169,6 +189,36 @@ void saveConfiguration(const char *filename, const Config &config) {
   configFile.close();
 }
 
+//***********************************
+//************* dimmer
+//***********************************
+
+#define outputPin  D7 
+#define zerocross  D6 // for boards with CHANGEBLE input pins
+dimmerLamp dimmer_hard(outputPin, zerocross); //initialase port for dimmer for ESP8266, ESP32, Arduino due boards
+int dimmer_security = 60;  // coupe le dimmer toute les X minutes en cas de probleme externe. 
+int dimmer_security_count = 0; 
+
+//***********************************
+//************* Time 
+//***********************************
+const long utcOffsetInSeconds = 3600;
+char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP, "pool.ntp.org", utcOffsetInSeconds);
+int timesync = 0; 
+int timesync_refresh = 120; 
+
+void call_time() {
+  if ( timesync_refresh >= timesync ) {  timeClient.update(); timesync = 0; }
+  else {timesync++;} 
+} 
+ 
+String getTime() {
+  String state; 
+  state = timeClient.getHours() + ":" + timeClient.getMinutes() ; 
+  return String(state);
+}
 
 //***********************************
 //************* Afficheur Oled
@@ -259,7 +309,7 @@ const char* PARAM_INPUT_port = "port"; /// paramettre de retour port server domo
 const char* PARAM_INPUT_delta = "delta"; /// paramettre retour delta
 const char* PARAM_INPUT_API = "apiKey"; /// paramettre de retour apiKey
 const char* PARAM_INPUT_servermode = "servermode"; /// paramettre de retour activation de mode server
-
+const char* PARAM_INPUT_dimmer_power = "POWER"; /// paramettre de retour activation de mode server
 
 String stringbool(bool mybool){
   String truefalse = "true";
@@ -278,6 +328,7 @@ String getServermode(String Servermode) {
   if ( Servermode == "Domoticz" ) {   config.UseDomoticz = !config.UseDomoticz; }
   if ( Servermode == "Jeedom" ) {   config.UseJeedom = !config.UseJeedom;}
   if ( Servermode == "autonome" ) {   config.autonome = !config.autonome; }
+  if ( Servermode == "dimmer local" ) {   config.dimmerlocal = !config.dimmerlocal; }
 
 return String(Servermode);
 }
@@ -289,7 +340,7 @@ String getSigma() {
 
 String getconfig() {
     
-  configweb = String(config.hostname) + ";" +  config.port + ";"  + config.IDX + ";"  +  VERSION +";" + middle +";"+ config.delta +";"+config.cycle+";"+config.dimmer+";"+config.cosphi+";"+config.readtime +";"+stringbool(config.UseDomoticz)+";"+stringbool(config.UseJeedom)+";"+stringbool(config.autonome)+";"+config.apiKey;
+  configweb = String(config.hostname) + ";" +  config.port + ";"  + config.IDX + ";"  +  VERSION +";" + middle +";"+ config.delta +";"+config.cycle+";"+config.dimmer+";"+config.cosphi+";"+config.readtime +";"+stringbool(config.UseDomoticz)+";"+stringbool(config.UseJeedom)+";"+stringbool(config.autonome)+";"+config.apiKey+";"+stringbool(config.dimmerlocal);
   return String(configweb);
 }
 
@@ -322,46 +373,6 @@ String processor(const String& var){
     
     return getState();
   }  
- /* else if (var == "HOSTNAME"){
-    
-    return String(config.hostname);
-  }
-  else if (var == "IDX"){
-    
-    return String(config.IDX);
-  }
-  else if (var == "PORT"){
-    
-    return String(config.port);
-  } 
-  else if (var == "APIKEY"){
-    
-    return String(config.apiKey);
-  }
-  else if (var == "PORT"){
-    
-    return String(config.port);
-  } 
-    else if (var == "DIMMER"){
-    
-    return String(config.dimmer);
-  }
-  else if (var == "DELTA"){
-    
-    return String(config.delta);
-  }
-      else if (var == "COSPHI"){
-    
-    return String(config.cosphi);
-  }
-  else if (var == "READTIME"){
-    
-    return String(config.readtime);
-  }
-    else if (var == "CYCLE"){
-    
-    return String(config.cycle);
-  } */
   
 }
 
@@ -399,6 +410,11 @@ void setup() {
   Serial.println(F("Saving configuration..."));
   saveConfiguration(filename_conf, config);
   
+
+  // configuration dimmer
+  dimmer_hard.begin(NORMAL_MODE, ON); //dimmer initialisation: name.begin(MODE, STATE) 
+  dimmer_hard.setPower(0); 
+  USE_SERIAL.println("Dimmer started...");
    
    // configuration Wifi
   AsyncWiFiManager wifiManager(&server,&dns);
@@ -534,6 +550,7 @@ server.on("/get", HTTP_ANY, [] (AsyncWebServerRequest *request) {
    if (request->hasParam(PARAM_INPUT_port)) { config.port = request->getParam(PARAM_INPUT_port)->value().toInt(); }
    if (request->hasParam(PARAM_INPUT_IDX)) { config.IDX = request->getParam(PARAM_INPUT_IDX)->value().toInt();}
    if (request->hasParam(PARAM_INPUT_API)) { request->getParam(PARAM_INPUT_API)->value().toCharArray(config.apiKey,64);}
+   if (request->hasParam(PARAM_INPUT_dimmer_power)) {dimmer_power = request->getParam( PARAM_INPUT_dimmer_power)->value().toInt(); change = 1 ;  } 
    
    if (request->hasParam(PARAM_INPUT_servermode)) { inputMessage = request->getParam( PARAM_INPUT_servermode)->value();
                                             getServermode(inputMessage);
@@ -545,18 +562,24 @@ server.on("/get", HTTP_ANY, [] (AsyncWebServerRequest *request) {
 
 	});
 
+
+    //***********************************
+    //************* mise en route de Time
+    //***********************************
+
+
+  timeClient.begin();
+  timeClient.update();
+		
 		//***********************************
 		//************* Setup -  demarrage du webserver et affichage de l'oled
 		//***********************************
 
+
+
   server.begin(); 
   affiche_info_main();
 }
-
-
-
-
-
 
 						//***********************************
 						//************* loop
@@ -694,9 +717,25 @@ const int deltaneg = 50 - config.delta ; // décalage de la sensibilité pour l'
 affiche_info_transmission(config.sending);
  delay (500*attente);
  ArduinoOTA.handle();
- 
-}
 
+ timesync++;
+ if  (timesync >= timesync_refresh*120 )  {  
+            timesync = 0;    timeClient.update();    
+            
+            
+                                          }
+  dimmer_security_count ++; 
+ if ( dimmer_security_count >= dimmer_security *120 )  {
+      dimmer_security_count = 0; 
+      /// dimmer security cut every %dimmer_security% minutes
+        dimmer_hard.setPower(0); 
+        
+                                                  }
+
+  if ( config.dimmerlocal == 1 && change == 1   ) {  dimmer_hard.setPower(5) ; delay ( 250 ) ; dimmer_hard.setPower(dimmer_power) ; change = 0 ; }                                         
+ }
+ 
+// *************** FIN DE LOOP ********************
 
 
 // ***********************************
@@ -707,12 +746,15 @@ affiche_info_transmission(config.sending);
 // ** recherche de changement sur la diode.
 // ***********************************
 void front(int variation) {
-
+  int Watchdog=0 ;  int Watchdog_alert=0; 
 	while ( digitalRead(sens) == variation ) {
 	delayMicroseconds (25);
+  Watchdog++;
+  if ( Watchdog > 10000 && Watchdog_alert == 0 ) {  Serial.print("Attention pas de porteuse, alimentation 12v AC ou pont redresseur débranché ? "); Watchdog_alert =1 ; } 
 
 	}
-  
+
+ 
 }
 
 
@@ -972,11 +1014,12 @@ boolean SendToDomotic(String Svalue){
 
   if ( config.autonome == 1 && change == 1   ) {  baseurl = "/?POWER=" + String(dimmer_power) ; http.begin(config.dimmer,80,baseurl);   int httpCode = http.GET();
   http.end(); }
+ 
 }
 
 
 //***********************************
-//************* Fonction aservicement autonome
+//************* Fonction aservissement autonome
 //***********************************
 
 void dimmer(int commande){

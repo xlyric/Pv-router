@@ -264,6 +264,13 @@
                         <label class="custom-control-label" for="autonome" onclick="sendservermode(this.innerHTML);" >autonome</label>
                       </div>
                 </div>
+				
+				<div class="form-group">
+                      <div class="custom-control custom-checkbox small">
+						<input type="checkbox" class="custom-control-input" id="dimmerlocal">
+                        <label class="custom-control-label" for="dimmerlocal" onclick="sendservermode(this.innerHTML);" >dimmer local</label>
+                      </div>
+                </div>
 
 				
 				<div class="form-group row">
@@ -353,6 +360,7 @@ function sendservermode (mode) {
 		document.getElementById("autonome").value = config[12];
 		document.getElementById("UseDomoticz").value = config[10];
 		document.getElementById("UseJeedom").value = config[11];
+		document.getElementById("dimmerlocal").value = config[14];
 		
 		}); 
 
@@ -437,6 +445,8 @@ var recupconfig = $.get ({
 		document.getElementById("UseJeedom").value = config[11];
 		document.getElementById("autonome").value = config[12];
 		document.getElementById("apiKey").value = config[13];
+		document.getElementById("dimmerlocal").checked = config[14];
+		document.getElementById("dimmerlocal").value = config[14];
 		
 
 	
@@ -467,7 +477,7 @@ var recupconfig = $.get ({
       <footer class="sticky-footer bg-white">
         <div class="container my-auto">
           <div class="copyright text-center my-auto">
-            <span>https://github.com/xlyric/  - 2019</span>
+            <span>https://github.com/xlyric/  - 2020</span>
           </div>
         </div>
       </footer>
