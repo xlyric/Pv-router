@@ -265,25 +265,31 @@
                       </div>
                 </div>
 				
-				<div class="form-group">
-                      <div class="custom-control custom-checkbox small">
-						<input type="checkbox" class="custom-control-input" id="dimmerlocal">
-                        <label class="custom-control-label" for="dimmerlocal" onclick="sendservermode(this.innerHTML);" >dimmer local</label>
-                      </div>
-                </div>
+
 
 				
 				<div class="form-group row">
 				 <div class="col-sm-3">delta</div>
-				 <div class="col-sm-3">cosphi</div>
-				 <div class="col-sm-3">readtime</div>
-				 <div class="col-sm-3">cycle</div>
+				 <div class="col-sm-3">facteur</div>
+
 				</div>
 				
                 <div class="form-group row">
                   <div class="col-sm-3">
 				  <input type="text" class="form-control form-control-user" id="delta" placeholder="%DELTA%">
                   </div>
+				  <div class="col-sm-3">
+				  <input type="text" class="form-control form-control-user" id="facteur" placeholder="%facteur%">
+                  </div>
+				  
+		        </div>
+				
+				<div class="form-group row">
+				 <div class="col-sm-3">cosphi</div>
+				 <div class="col-sm-3">readtime</div>
+				 <div class="col-sm-3">cycle</div>
+				</div>
+				<div class="form-group row">
                   <div class="col-sm-3">
                    <input type="text" class="form-control form-control-user" id="cosphi" placeholder="%COSPHI%">
                   </div>
@@ -295,6 +301,21 @@
                   </div>
 
                 </div>
+
+				<div class="form-group row">
+				 <div class="col-sm-3">Dimmer Local</div>
+				</div>
+				<div class="form-group">
+                      <div class="custom-control custom-checkbox small">
+						<input type="checkbox" class="custom-control-input" id="dimmerlocal">
+                        <label class="custom-control-label" for="dimmerlocal" onclick="sendservermode(this.innerHTML);" >dimmer local</label>
+                      </div>
+                </div>
+				  
+
+				
+	
+				
 				<input type="submit" value=" Application des parametres" class="btn btn-primary btn-user btn-block">
 				
                 <hr>
@@ -361,7 +382,6 @@ function sendservermode (mode) {
 		document.getElementById("UseDomoticz").value = config[10];
 		document.getElementById("UseJeedom").value = config[11];
 		document.getElementById("dimmerlocal").value = config[14];
-		
 		}); 
 
 
@@ -400,7 +420,7 @@ $( "#save" ).click(function() {
 
 $( "#formulaire" ).submit(function() {
 
-	 var data = {'server':$('#hostname').val(), 'idx':$('#IDX').val(),	 'cosphi':$('#cosphi').val(), 'readtime':$('#readtime').val()	, 'cycle':$('#cycle').val(), 'dimmer':$('#dimmer').val(),'port':$('#port').val(), 'delta':$('#delta').val(),  'apiKey':$('#apiKey').val() } 
+	 var data = {'server':$('#hostname').val(), 'idx':$('#IDX').val(),	 'cosphi':$('#cosphi').val(), 'readtime':$('#readtime').val()	, 'cycle':$('#cycle').val(), 'dimmer':$('#dimmer').val(),'port':$('#port').val(), 'delta':$('#delta').val(),  'apiKey':$('#apiKey').val(), 'facteur':$('#facteur').val() } 
 
 
 		
@@ -447,8 +467,7 @@ var recupconfig = $.get ({
 		document.getElementById("apiKey").value = config[13];
 		document.getElementById("dimmerlocal").checked = config[14];
 		document.getElementById("dimmerlocal").value = config[14];
-		
-
+		document.getElementById("facteur").value = config[15];
 	
 
 

@@ -67,7 +67,7 @@
 // Include custom images
 #include "images.h"
 
-const String VERSION = "Version 2.2" ;
+const String VERSION = "Version 2.3" ;
 
 //***********************************
 //************* Gestion de la configuration
@@ -89,6 +89,7 @@ struct Config {
   bool autonome;
   char dimmer[15];
   bool dimmerlocal;
+  float facteur;
 };
 
 const char *filename_conf = "/config.json";
@@ -131,6 +132,7 @@ void loadConfiguration(const char *filename, Config &config) {
           doc["otapassword"] | "Pvrouteur2", // <- source
           sizeof(config.otapassword));         // <- destination's capacity
   
+  config.facteur = doc["facteur"] | 1.5; 
   config.delta = doc["delta"] | 50; 
   config.cosphi = doc["cosphi"] | 11; 
   config.readtime = doc["readtime"] | 555;
@@ -179,6 +181,7 @@ void saveConfiguration(const char *filename, const Config &config) {
   doc["autonome"] = config.autonome;
   doc["dimmer"] = config.dimmer;
   doc["dimmerlocal"] = config.dimmerlocal;
+  doc["facteur"] = config.facteur;
 
   // Serialize JSON to file
   if (serializeJson(doc, configFile) == 0) {
@@ -266,6 +269,7 @@ String configweb , memory, inputMessage;
 int inj_mode = 0 ; 
 int RMS = 0 ;
 bool change;
+String serialmessage; 
 
 //***********************************
 //************* Gestion du serveur WEB
@@ -310,6 +314,7 @@ const char* PARAM_INPUT_delta = "delta"; /// paramettre retour delta
 const char* PARAM_INPUT_API = "apiKey"; /// paramettre de retour apiKey
 const char* PARAM_INPUT_servermode = "servermode"; /// paramettre de retour activation de mode server
 const char* PARAM_INPUT_dimmer_power = "POWER"; /// paramettre de retour activation de mode server
+const char* PARAM_INPUT_facteur = "facteur"; /// paramettre retour delta
 
 String stringbool(bool mybool){
   String truefalse = "true";
@@ -323,6 +328,14 @@ String getSendmode() {
   else {   sendmode = "On"; }
   return String(sendmode);
 }
+
+String getserial() {
+  String(sendserial);
+  sendserial=serialmessage;
+  serialmessage="";
+  return String(sendserial);
+}
+
 
 String getServermode(String Servermode) {
   if ( Servermode == "Domoticz" ) {   config.UseDomoticz = !config.UseDomoticz; }
@@ -340,7 +353,7 @@ String getSigma() {
 
 String getconfig() {
     
-  configweb = String(config.hostname) + ";" +  config.port + ";"  + config.IDX + ";"  +  VERSION +";" + middle +";"+ config.delta +";"+config.cycle+";"+config.dimmer+";"+config.cosphi+";"+config.readtime +";"+stringbool(config.UseDomoticz)+";"+stringbool(config.UseJeedom)+";"+stringbool(config.autonome)+";"+config.apiKey+";"+stringbool(config.dimmerlocal);
+  configweb = String(config.hostname) + ";" +  config.port + ";"  + config.IDX + ";"  +  VERSION +";" + middle +";"+ config.delta +";"+config.cycle+";"+config.dimmer+";"+config.cosphi+";"+config.readtime +";"+stringbool(config.UseDomoticz)+";"+stringbool(config.UseJeedom)+";"+stringbool(config.autonome)+";"+config.apiKey+";"+stringbool(config.dimmerlocal)+";"+config.facteur;
   return String(configweb);
 }
 
@@ -397,6 +410,11 @@ void setup() {
   //démarrage file system
   SPIFFS.begin();
   Serial.println("Demarrage file System");
+
+  // vérification de la présence d'index.html
+  if(!SPIFFS.exists("/index.html")){
+    Serial.println("Attention fichiers SPIFFS non chargé sur l'ESP, ça ne fonctionnera pas.");  
+    }
   
 		//***********************************
 		//************* Setup -  récupération du fichier de configuration
@@ -470,7 +488,10 @@ void setup() {
 		//***********************************
 
   server.on("/",HTTP_ANY, [](AsyncWebServerRequest *request){
-    request->send(SPIFFS, "/index.html", String(), false, processor);
+      if(SPIFFS.exists("/index.html")){
+     request->send(SPIFFS, "/index.html", String(), false, processor);
+    }
+    else {request->send_P(200, "text/plain", "fichiers SPIFFS non présent sur l ESP. " ); }
   });
 
     server.on("/config.html",HTTP_ANY, [](AsyncWebServerRequest *request){
@@ -509,6 +530,10 @@ void setup() {
     request->send_P(200, "text/plain", getState().c_str());
   });
 
+  server.on("/serial", HTTP_ANY, [](AsyncWebServerRequest *request){
+    request->send_P(200, "text/plain", getState().c_str());
+  });
+  
   server.on("/config", HTTP_ANY, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/plain", getconfig().c_str());
   });
@@ -551,6 +576,9 @@ server.on("/get", HTTP_ANY, [] (AsyncWebServerRequest *request) {
    if (request->hasParam(PARAM_INPUT_IDX)) { config.IDX = request->getParam(PARAM_INPUT_IDX)->value().toInt();}
    if (request->hasParam(PARAM_INPUT_API)) { request->getParam(PARAM_INPUT_API)->value().toCharArray(config.apiKey,64);}
    if (request->hasParam(PARAM_INPUT_dimmer_power)) {dimmer_power = request->getParam( PARAM_INPUT_dimmer_power)->value().toInt(); change = 1 ;  } 
+   if (request->hasParam(PARAM_INPUT_facteur)) { config.facteur = request->getParam(PARAM_INPUT_facteur)->value().toFloat();}
+   
+   
    
    if (request->hasParam(PARAM_INPUT_servermode)) { inputMessage = request->getParam( PARAM_INPUT_servermode)->value();
                                             getServermode(inputMessage);
@@ -649,7 +677,7 @@ const int deltaneg = 50 - config.delta ; // décalage de la sensibilité pour l'
 
    //if ( inversion == 1 ) { somme = 0 - somme ; }
    /// si la valeur est validée, sigma est raffraichi 
-   if (validation == 1 ) { sigma = somme * 1.5 ; }
+   if (validation == 1 ) { sigma = somme * config.facteur ; }
 
 //**************************
 ////  détection traitement des conso
