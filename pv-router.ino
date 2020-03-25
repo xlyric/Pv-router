@@ -67,7 +67,7 @@
 // Include custom images
 #include "images.h"
 
-const String VERSION = "Version 2.3" ;
+const String VERSION = "Version 2.4" ;
 
 //***********************************
 //************* Gestion de la configuration
@@ -82,6 +82,7 @@ struct Config {
   String IDX;
   char otapassword[64];
   int delta;
+  int deltaneg;
   int cosphi;
   int readtime;
   int cycle;
@@ -90,6 +91,7 @@ struct Config {
   char dimmer[15];
   bool dimmerlocal;
   float facteur;
+  int num_fuse;
 };
 
 const char *filename_conf = "/config.json";
@@ -134,6 +136,8 @@ void loadConfiguration(const char *filename, Config &config) {
   
   config.facteur = doc["facteur"] | 1.5; 
   config.delta = doc["delta"] | 50; 
+  config.num_fuse = doc["fuse"] | 50;
+  config.deltaneg = doc["deltaneg"] | 0; 
   config.cosphi = doc["cosphi"] | 11; 
   config.readtime = doc["readtime"] | 555;
   config.cycle = doc["cycle"] | 72;
@@ -174,6 +178,7 @@ void saveConfiguration(const char *filename, const Config &config) {
   doc["IDX"] = config.IDX;
   doc["otapassword"] = config.otapassword;
   doc["delta"] = config.delta;
+  doc["deltaneg"] = config.deltaneg;
   doc["cosphi"] = config.cosphi;
   doc["readtime"] = config.readtime;
   doc["cycle"] = config.cycle;
@@ -182,6 +187,7 @@ void saveConfiguration(const char *filename, const Config &config) {
   doc["dimmer"] = config.dimmer;
   doc["dimmerlocal"] = config.dimmerlocal;
   doc["facteur"] = config.facteur;
+  doc["fuse"] = config.num_fuse;
 
   // Serialize JSON to file
   if (serializeJson(doc, configFile) == 0) {
@@ -311,6 +317,8 @@ const char* PARAM_INPUT_server = "server"; /// paramettre de retour server domot
 const char* PARAM_INPUT_IDX = "idx"; /// paramettre de retour idx
 const char* PARAM_INPUT_port = "port"; /// paramettre de retour port server domotique
 const char* PARAM_INPUT_delta = "delta"; /// paramettre retour delta
+const char* PARAM_INPUT_deltaneg = "deltaneg"; /// paramettre retour deltaneg
+const char* PARAM_INPUT_fuse = "fuse"; /// paramettre retour fusible numérique
 const char* PARAM_INPUT_API = "apiKey"; /// paramettre de retour apiKey
 const char* PARAM_INPUT_servermode = "servermode"; /// paramettre de retour activation de mode server
 const char* PARAM_INPUT_dimmer_power = "POWER"; /// paramettre de retour activation de mode server
@@ -572,6 +580,8 @@ server.on("/get", HTTP_ANY, [] (AsyncWebServerRequest *request) {
    if (request->hasParam(PARAM_INPUT_dimmer)) { request->getParam(PARAM_INPUT_dimmer)->value().toCharArray(config.dimmer,15);  }
    if (request->hasParam(PARAM_INPUT_server)) { request->getParam(PARAM_INPUT_server)->value().toCharArray(config.hostname,15);  }
    if (request->hasParam(PARAM_INPUT_delta)) { config.delta = request->getParam(PARAM_INPUT_delta)->value().toInt(); }
+   if (request->hasParam(PARAM_INPUT_deltaneg)) { config.deltaneg = request->getParam(PARAM_INPUT_deltaneg)->value().toInt(); }
+   if (request->hasParam(PARAM_INPUT_fuse)) { config.num_fuse = request->getParam(PARAM_INPUT_fuse)->value().toInt(); }
    if (request->hasParam(PARAM_INPUT_port)) { config.port = request->getParam(PARAM_INPUT_port)->value().toInt(); }
    if (request->hasParam(PARAM_INPUT_IDX)) { config.IDX = request->getParam(PARAM_INPUT_IDX)->value().toInt();}
    if (request->hasParam(PARAM_INPUT_API)) { request->getParam(PARAM_INPUT_API)->value().toCharArray(config.apiKey,64);}
@@ -615,7 +625,7 @@ server.on("/get", HTTP_ANY, [] (AsyncWebServerRequest *request) {
 
 
 void loop() {
-const int deltaneg = 50 - config.delta ; // décalage de la sensibilité pour l'injection
+//const int deltaneg = 50 - config.delta ; // décalage de la sensibilité pour l'injection
 /// preparation des mesures
   temp = 0; 
   timer = 0 ; 
@@ -687,7 +697,7 @@ const int deltaneg = 50 - config.delta ; // décalage de la sensibilité pour l'
 
 // production
   if ( somme > config.delta ) {
-    //dimmer = 10 ;
+ 
     if ( modeserial == 1 )  {Serial.println("prod"); }
   
     message = "Mode Linky        "; 
@@ -704,8 +714,8 @@ const int deltaneg = 50 - config.delta ; // décalage de la sensibilité pour l'
 //**************************
 // injection 
 //**************************
-  else if ( somme < deltaneg ) {
-    //dimmer = -10;
+  else if ( somme < config.deltaneg ) {
+    
     if ( modeserial == 1 )  {Serial.println("inj"); }
     
     message = "Correc injection    ";
@@ -1056,7 +1066,7 @@ void dimmer(int commande){
 	else if (commande == 0  ) { dimmer_power += -2 ; change = 1; }  /// si mode linky  on reduit la puissance 
 	else if (commande == 1  ) { dimmer_power += 5 ; change = 1 ; } /// si injection on augmente la puissance
 		
-if ( dimmer_power >= num_fuse ) {dimmer_power = num_fuse; change = 1 ; }
+if ( dimmer_power >= num_fuse ) {dimmer_power = config.num_fuse; change = 1 ; }
 if ( dimmer_power <= 0 ) {dimmer_power = 0; change = 1 ; }
 	
 }
