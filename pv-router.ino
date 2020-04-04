@@ -63,11 +63,21 @@
 // ota mise à jour sans fil
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
+//mqtt
+#include <PubSubClient.h>
+#define mqtt_user "pvrouter"
+// Dallas 18b20
+//#include <OneWire.h>
+//#include <DallasTemperature.h>
 
 // Include custom images
 #include "images.h"
 
-const String VERSION = "Version 2.4" ;
+const String VERSION = "Version 2.5" ;
+
+// test
+const char* mqtt_server = "192.168.1.20";
+
 
 //***********************************
 //************* Gestion de la configuration
@@ -92,6 +102,9 @@ struct Config {
   bool dimmerlocal;
   float facteur;
   int num_fuse;
+  bool mqtt;
+  String IDXdimmer;
+  int tmax;
 };
 
 const char *filename_conf = "/config.json";
@@ -129,6 +142,7 @@ void loadConfiguration(const char *filename, Config &config) {
   config.UseDomoticz = doc["UseDomoticz"] | true; 
   config.UseJeedom = doc["UseJeedom"] | false; 
   config.IDX = doc["IDX"] | 36; 
+  config.IDXdimmer = doc["IDXdimmer"] | 60; 
   
   strlcpy(config.otapassword,                  // <- destination
           doc["otapassword"] | "Pvrouteur2", // <- source
@@ -141,8 +155,10 @@ void loadConfiguration(const char *filename, Config &config) {
   config.cosphi = doc["cosphi"] | 11; 
   config.readtime = doc["readtime"] | 555;
   config.cycle = doc["cycle"] | 72;
+  config.tmax = doc["tmax"] | 65;
   config.sending = doc["sending"] | false;
   config.autonome = doc["autonome"] | true;
+  config.mqtt = doc["mqtt"] | true;
   config.dimmerlocal = doc["dimmerlocal"] | false;
   strlcpy(config.dimmer,                  // <- destination
           doc["dimmer"] | "192.168.1.20", // <- source
@@ -176,6 +192,7 @@ void saveConfiguration(const char *filename, const Config &config) {
   doc["UseDomoticz"] = config.UseDomoticz;
   doc["UseJeedom"] = config.UseJeedom;
   doc["IDX"] = config.IDX;
+  doc["IDXdimmer"] = config.IDXdimmer;
   doc["otapassword"] = config.otapassword;
   doc["delta"] = config.delta;
   doc["deltaneg"] = config.deltaneg;
@@ -188,6 +205,8 @@ void saveConfiguration(const char *filename, const Config &config) {
   doc["dimmerlocal"] = config.dimmerlocal;
   doc["facteur"] = config.facteur;
   doc["fuse"] = config.num_fuse;
+  doc["mqtt"] = config.mqtt;
+  doc["tmax"] = config.tmax;
 
   // Serialize JSON to file
   if (serializeJson(doc, configFile) == 0) {
@@ -207,6 +226,16 @@ void saveConfiguration(const char *filename, const Config &config) {
 dimmerLamp dimmer_hard(outputPin, zerocross); //initialase port for dimmer for ESP8266, ESP32, Arduino due boards
 int dimmer_security = 60;  // coupe le dimmer toute les X minutes en cas de probleme externe. 
 int dimmer_security_count = 0; 
+
+
+//***********************************
+//************* Dallas 18b20
+//***********************************
+#define ONE_WIRE_BUS 7
+#define TEMPERATURE_PRECISION 10
+//OneWire oneWire(ONE_WIRE_BUS);
+//DallasTemperature sensors(&oneWire);
+//DeviceAddress Thermometer_ECS = { 0x28,  0xD4,  0xB0,  0x26,  0x0,  0x0,  0x80,  0xBC };
 
 //***********************************
 //************* Time 
@@ -256,6 +285,7 @@ int front_size=19 ; // ( n +1 )  cycle d'onde de 36 mesures ( 360°/10 soit 10°
 #define pinreset 1 /// si D0 et reset connecté >> 1
 int num_fuse = 50 ; /// limitation de la puissance du dimmer numérique à 50% 
 int dimmer_power = 0;
+int security=0; // envoie régulier de 0 vers le dimmer dans certains cas 
 
 /// constantes de debug 
 // #define debug 1  // recherche la valeur milieu >> middle   
@@ -277,18 +307,18 @@ int RMS = 0 ;
 bool change;
 String serialmessage; 
 
+
 //***********************************
 //************* Gestion du serveur WEB
 //***********************************
 // Create AsyncWebServer object on port 80
 WiFiClient domotic_client;
+// mqtt
+PubSubClient client(domotic_client);
 
 AsyncWebServer server(80);
 DNSServer dns;
 HTTPClient http;
-
-//String state = "Stabilise";
-//String sendmode = "off";
 
 
 // creation des fonctions de collect 
@@ -315,6 +345,7 @@ const char* PARAM_INPUT_save = "save"; /// paramettre de retour cosphi
 const char* PARAM_INPUT_dimmer = "dimmer"; /// paramettre de retour cosphi
 const char* PARAM_INPUT_server = "server"; /// paramettre de retour server domotique
 const char* PARAM_INPUT_IDX = "idx"; /// paramettre de retour idx
+const char* PARAM_INPUT_IDXdimmer = "idxdimmer"; /// paramettre de retour idx
 const char* PARAM_INPUT_port = "port"; /// paramettre de retour port server domotique
 const char* PARAM_INPUT_delta = "delta"; /// paramettre retour delta
 const char* PARAM_INPUT_deltaneg = "deltaneg"; /// paramettre retour deltaneg
@@ -323,6 +354,7 @@ const char* PARAM_INPUT_API = "apiKey"; /// paramettre de retour apiKey
 const char* PARAM_INPUT_servermode = "servermode"; /// paramettre de retour activation de mode server
 const char* PARAM_INPUT_dimmer_power = "POWER"; /// paramettre de retour activation de mode server
 const char* PARAM_INPUT_facteur = "facteur"; /// paramettre retour delta
+const char* PARAM_INPUT_tmax = "tmax"; /// paramettre retour delta
 
 String stringbool(bool mybool){
   String truefalse = "true";
@@ -350,6 +382,7 @@ String getServermode(String Servermode) {
   if ( Servermode == "Jeedom" ) {   config.UseJeedom = !config.UseJeedom;}
   if ( Servermode == "autonome" ) {   config.autonome = !config.autonome; }
   if ( Servermode == "dimmer local" ) {   config.dimmerlocal = !config.dimmerlocal; }
+  if ( Servermode == "mqtt" ) {   config.mqtt = !config.mqtt; }
 
 return String(Servermode);
 }
@@ -464,7 +497,8 @@ void setup() {
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP()); 
   Serial.println(ESP.getResetReason());
-
+  // mqtt
+  client.connect("pvrouter");
 		//***********************************
 		//************* Setup - OTA 
 		//***********************************
@@ -584,9 +618,11 @@ server.on("/get", HTTP_ANY, [] (AsyncWebServerRequest *request) {
    if (request->hasParam(PARAM_INPUT_fuse)) { config.num_fuse = request->getParam(PARAM_INPUT_fuse)->value().toInt(); }
    if (request->hasParam(PARAM_INPUT_port)) { config.port = request->getParam(PARAM_INPUT_port)->value().toInt(); }
    if (request->hasParam(PARAM_INPUT_IDX)) { config.IDX = request->getParam(PARAM_INPUT_IDX)->value().toInt();}
+   if (request->hasParam(PARAM_INPUT_IDXdimmer)) { config.IDXdimmer = request->getParam(PARAM_INPUT_IDXdimmer)->value().toInt();}
    if (request->hasParam(PARAM_INPUT_API)) { request->getParam(PARAM_INPUT_API)->value().toCharArray(config.apiKey,64);}
    if (request->hasParam(PARAM_INPUT_dimmer_power)) {dimmer_power = request->getParam( PARAM_INPUT_dimmer_power)->value().toInt(); change = 1 ;  } 
    if (request->hasParam(PARAM_INPUT_facteur)) { config.facteur = request->getParam(PARAM_INPUT_facteur)->value().toFloat();}
+   if (request->hasParam(PARAM_INPUT_tmax)) { config.tmax = request->getParam(PARAM_INPUT_tmax)->value().toInt();}
    
    
    
@@ -617,6 +653,10 @@ server.on("/get", HTTP_ANY, [] (AsyncWebServerRequest *request) {
 
   server.begin(); 
   affiche_info_main();
+  
+  client.setServer(mqtt_server, 1883);
+  mqtt(config.IDXdimmer,"0"); 
+  
 }
 
 						//***********************************
@@ -707,7 +747,7 @@ void loop() {
        SendToDomotic(String(sigma));  
     
       
-       delay(5*attente*1000); 
+       delay(2*attente*1000); 
     }
   }
   
@@ -724,7 +764,7 @@ void loop() {
     if ( config.sending == 1) {
             SendToDomotic(String(sigma));  
             
-            delay(5*attente*1000); 
+            delay(2*attente*1000); 
     
     } 
     
@@ -732,7 +772,7 @@ void loop() {
   else {
 		message = "Mode stabilise    " ;
 		inj_mode=2;
-		
+    if ( config.sending == 1 ) {	 security ++; if ( security >=6 ) { SendToDomotic(String(sigma)); delay(5*attente*1000); security =0; }  }  // envoie de l'info de temps en temps pour les logs
   }
   affiche_info_injection(inj_mode);
   affiche_info_volume(sigma);
@@ -1043,6 +1083,7 @@ boolean SendToDomotic(String Svalue){
 
   if ( config.UseDomoticz == 1 ) { baseurl = "/json.htm?type=command&param=udevice&idx="+config.IDX+"&nvalue=0&svalue="+Svalue;  http.begin(config.hostname,config.port,baseurl); }
   if ( config.UseJeedom == 1 ) {  baseurl = "/core/api/jeeApi.php?apikey=" + String(config.apiKey) + "&type=virtual&id="+ config.IDX + "&value=" + Svalue; http.begin(config.hostname,config.port,baseurl);  }
+  if ( config.mqtt == 1 ) {     mqtt(config.IDX,Svalue);  }
   Serial.println(baseurl);
 
   // http.begin(config.hostname,config.port,baseurl);
@@ -1051,7 +1092,10 @@ boolean SendToDomotic(String Svalue){
   http.end();
 
   if ( config.autonome == 1 && change == 1   ) {  baseurl = "/?POWER=" + String(dimmer_power) ; http.begin(config.dimmer,80,baseurl);   int httpCode = http.GET();
-  http.end(); }
+    http.end(); 
+    if ( config.mqtt == 1 ) { mqtt(config.IDXdimmer, String(dimmer_power));  }
+    }
+
  
 }
 
@@ -1062,13 +1106,65 @@ boolean SendToDomotic(String Svalue){
 
 void dimmer(int commande){
   change = 0; 
-	if ( sigma >= 350 ) { dimmer_power = 0 ;  change = 1 ;} // si grosse puissance instantanée sur le réseau, coupure du dimmer. ( ici 350w environ ) 
-	else if (commande == 0  ) { dimmer_power += -2 ; change = 1; }  /// si mode linky  on reduit la puissance 
-	else if (commande == 1  ) { dimmer_power += 5 ; change = 1 ; } /// si injection on augmente la puissance
-		
-if ( dimmer_power >= num_fuse ) {dimmer_power = config.num_fuse; change = 1 ; }
-if ( dimmer_power <= 0 ) {dimmer_power = 0; change = 1 ; }
-	
+
+  
+	if ( sigma >= 350 && dimmer_power != 0 ) { dimmer_power = 0 ;  change = 1 ;} // si grosse puissance instantanée sur le réseau, coupure du dimmer. ( ici 350w environ ) 
+	else if (commande == 0 && dimmer_power != 0 ) { dimmer_power += -2 ; change = 1; }  /// si mode linky  on reduit la puissance 
+	else if (commande == 1  ) { dimmer_power += 4 ; change = 1 ; } /// si injection on augmente la puissance
+  
+  
+if ( dimmer_power >= config.num_fuse ) {dimmer_power = config.num_fuse; change = 1 ; }
+if ( dimmer_power <= 0 && dimmer_power != 0 ) {dimmer_power = 0; change = 1 ; }
+
+if (commande == 2  ) { change = 1 ; } /// mode stabilisé, envoie de sigma de temps en temps
+
+security ++ ;
+if ( security >= 5 ) { if ( dimmer_power <= 0 ) {dimmer_power = 0; change = 1 ; security = 0;  }} 
+
 }
+
+
+void mqtt(String idx, String value)
+{
+  String nvalue = "0" ; 
+  if ( value != "0" ) { nvalue = "2" ; }
+String message = "  { \"idx\" : " + idx +" ,   \"svalue\" : \"" + value + "\",  \"nvalue\" : " + nvalue + "  } ";
+
+  if (!client.connected()) {
+    reconnect();
+  }
+  client.loop();
+  client.publish("domoticz/in", String(message).c_str(), true);
+  
+}
+
+
+
+
+void reconnect() {
+  // Loop until we're reconnected
+  while (!client.connected()) {
+    Serial.print("Attempting MQTT connection...");
+    // Create a random client ID
+    String clientId = "ESP8266Client-";
+    clientId += String(random(0xffff), HEX);
+    // Attempt to connect
+    if (client.connect(clientId.c_str())) {
+      Serial.println("connected");
+      // Once connected, publish an announcement...
+      client.publish("outTopic", "hello world");
+      // ... and resubscribe
+      client.subscribe("inTopic");
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(client.state());
+      Serial.println(" try again in 5 seconds");
+      // Wait 5 seconds before retrying
+      delay(5000);
+    }
+  }
+}
+
+
 
 
