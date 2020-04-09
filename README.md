@@ -1,4 +1,4 @@
-# Pv router V2.1
+# Pv router V2.7
 
 [![N|Solid](https://cldup.com/dTxpPi9lDf.thumb.png)](https://nodesource.com/products/nsolid)
 
@@ -98,6 +98,33 @@ https://github.com/esp8266/Arduino/blob/master/tools/espota.py
 python espota.py -d  -i 10.0.0.106 -f file.bin
 
 
+Special commands
 
+exemple :
+Ip:/get&cosphi=11
+
+"send"; /// paramettre de retour sendmode
+"cycle"; /// paramettre de retour cycle
+"readtime"; /// paramettre de retour readtime
+ "cosphi"; /// paramettre de retour cosphi
+"save"; /// paramettre de retour cosphi
+ "dimmer"; /// paramettre de retour cosphi
+"server"; /// paramettre de retour server domotique
+"idx"; /// paramettre de retour idx
+"idxdimmer"; /// paramettre de retour idx
+ "port"; /// paramettre de retour port server domotique
+"delta"; /// paramettre retour delta
+"deltaneg"; /// paramettre retour deltaneg
+ "fuse"; /// paramettre retour fusible numérique
+ "apiKey"; /// paramettre de retour apiKey
+ "servermode"; /// paramettre de retour activation de mode server
+ "POWER"; /// paramettre de retour activation de mode server
+ "facteur"; /// paramettre retour delta
+ "tmax"; /// paramettre retour delta
+ "mqttserver"; /// paramettre retour mqttserver
+
+BETA : 
+/cosphi find up point
+/puissance  indicate power of charge
 
 

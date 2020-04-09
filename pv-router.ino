@@ -73,10 +73,10 @@
 // Include custom images
 #include "images.h"
 
-const String VERSION = "Version 2.5" ;
+const String VERSION = "Version 2.7" ;
 
 // test
-const char* mqtt_server = "192.168.1.20";
+//const char* mqtt_server = "192.168.1.20";
 
 
 //***********************************
@@ -103,6 +103,7 @@ struct Config {
   float facteur;
   int num_fuse;
   bool mqtt;
+  char mqttserver[15];
   String IDXdimmer;
   int tmax;
 };
@@ -163,6 +164,10 @@ void loadConfiguration(const char *filename, Config &config) {
   strlcpy(config.dimmer,                  // <- destination
           doc["dimmer"] | "192.168.1.20", // <- source
           sizeof(config.dimmer));         // <- destination's capacity
+
+   strlcpy(config.mqttserver,                  // <- destination
+          doc["mqttserver"] | "192.168.1.20", // <- source
+          sizeof(config.hostname));         // <- destination's capacity
   configFile.close();
       
 }
@@ -206,6 +211,7 @@ void saveConfiguration(const char *filename, const Config &config) {
   doc["facteur"] = config.facteur;
   doc["fuse"] = config.num_fuse;
   doc["mqtt"] = config.mqtt;
+  doc["mqttserver"] = config.mqttserver;  
   doc["tmax"] = config.tmax;
 
   // Serialize JSON to file
@@ -307,7 +313,7 @@ int RMS = 0 ;
 bool change;
 String serialmessage; 
 
-
+int bestcosphi, bestpuissance; 
 //***********************************
 //************* Gestion du serveur WEB
 //***********************************
@@ -355,6 +361,7 @@ const char* PARAM_INPUT_servermode = "servermode"; /// paramettre de retour acti
 const char* PARAM_INPUT_dimmer_power = "POWER"; /// paramettre de retour activation de mode server
 const char* PARAM_INPUT_facteur = "facteur"; /// paramettre retour delta
 const char* PARAM_INPUT_tmax = "tmax"; /// paramettre retour delta
+const char* PARAM_INPUT_mqttserver = "mqttserver"; /// paramettre retour mqttserver
 
 String stringbool(bool mybool){
   String truefalse = "true";
@@ -391,6 +398,20 @@ String getSigma() {
   
   return String(sigma);
 }
+
+
+String getcosphi() {
+  
+  return String(bestcosphi+4) ;
+}
+
+
+String getpuissance() {
+  int tempvalue=15;
+  return String(bestpuissance*config.facteur) ;
+}
+
+
 
 String getconfig() {
     
@@ -592,6 +613,14 @@ server.on("/config.json", HTTP_ANY, [](AsyncWebServerRequest *request){
     request->send(SPIFFS, "/config.json", "application/json");
   });
 
+/// beta
+server.on("/cosphi", HTTP_ANY, [](AsyncWebServerRequest *request){
+    request->send_P(200, "text/plain", getcosphi().c_str());
+  });
+  
+server.on("/puissance", HTTP_ANY, [](AsyncWebServerRequest *request){
+    request->send_P(200, "text/plain",  getpuissance().c_str());
+  });
 
 /////////////////////////
 ////// mise à jour parametre d'envoie vers domoticz et récupération des modifications de configurations
@@ -613,6 +642,7 @@ server.on("/get", HTTP_ANY, [] (AsyncWebServerRequest *request) {
 	 if (request->hasParam(PARAM_INPUT_4)) { config.cosphi = request->getParam(PARAM_INPUT_4)->value().toInt();  }
    if (request->hasParam(PARAM_INPUT_dimmer)) { request->getParam(PARAM_INPUT_dimmer)->value().toCharArray(config.dimmer,15);  }
    if (request->hasParam(PARAM_INPUT_server)) { request->getParam(PARAM_INPUT_server)->value().toCharArray(config.hostname,15);  }
+   if (request->hasParam(PARAM_INPUT_mqttserver)) { request->getParam(PARAM_INPUT_mqttserver)->value().toCharArray(config.mqttserver,15);  }
    if (request->hasParam(PARAM_INPUT_delta)) { config.delta = request->getParam(PARAM_INPUT_delta)->value().toInt(); }
    if (request->hasParam(PARAM_INPUT_deltaneg)) { config.deltaneg = request->getParam(PARAM_INPUT_deltaneg)->value().toInt(); }
    if (request->hasParam(PARAM_INPUT_fuse)) { config.num_fuse = request->getParam(PARAM_INPUT_fuse)->value().toInt(); }
@@ -654,9 +684,13 @@ server.on("/get", HTTP_ANY, [] (AsyncWebServerRequest *request) {
   server.begin(); 
   affiche_info_main();
   
-  client.setServer(mqtt_server, 1883);
+  client.setServer(onfig.mqttserver, 1883);
   mqtt(config.IDXdimmer,"0"); 
-  
+
+
+  ///beta 
+   bestcosphi = calibrage_cosphi(); 
+  bestpuissance = calibrage_puissance(); 
 }
 
 						//***********************************
@@ -1166,5 +1200,51 @@ void reconnect() {
 }
 
 
+int calibrage_puissance() {
+
+ int lowpower, middlepower, httpCode; 
+ lowpower = mesure(); 
+ String baseurl; 
+ dimmer_power=50;
+ baseurl = "/?POWER=" + String(dimmer_power) ; http.begin(config.dimmer,80,baseurl);    httpCode = http.GET();  http.end(); 
+ delay(2000); 
+ middlepower = mesure(); 
+ dimmer_power=0;
+ baseurl = "/?POWER=" + String(dimmer_power) ; http.begin(config.dimmer,80,baseurl);    httpCode = http.GET();  http.end();
+ delay(500); 
+
+ lowpower = ( middlepower - lowpower ) * 2 ; 
+
+ return lowpower;  
+    
+}
+
+int calibrage_cosphi() {
+ int  httpCode,good_cosphi, maxval; 
+ maxval = 0; 
+  String baseurl; 
+  int count = 0;
+  dimmer_power=50;
+  baseurl = "/?POWER=" + String(dimmer_power) ; http.begin(config.dimmer,80,baseurl);    httpCode = http.GET();  http.end(); 
+  delay(2000);
+  front(1);
+  front(0);
+
+while ( digitalRead(sens) == 1 )
+  {
+    temp =  analogRead(linky); 
+    if ( temp >= maxval ) {    maxval = temp; good_cosphi = count ; }
+    delayMicroseconds (config.readtime);
+    count ++;  }
+  
+  
+  dimmer_power = 0;
+  baseurl = "/?POWER=" + String(dimmer_power) ; http.begin(config.dimmer,80,baseurl);    httpCode = http.GET();  http.end();
+  delay(500);
+
+  
+  
+  return good_cosphi;
+}
 
 
