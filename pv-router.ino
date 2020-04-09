@@ -408,6 +408,7 @@ String getcosphi() {
 
 String getpuissance() {
   int tempvalue=15;
+  
   return String(bestpuissance*config.facteur) ;
 }
 
@@ -684,7 +685,7 @@ server.on("/get", HTTP_ANY, [] (AsyncWebServerRequest *request) {
   server.begin(); 
   affiche_info_main();
   
-  client.setServer(onfig.mqttserver, 1883);
+  client.setServer(config.mqttserver, 1883);
   mqtt(config.IDXdimmer,"0"); 
 
 
