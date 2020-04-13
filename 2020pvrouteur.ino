@@ -699,8 +699,8 @@ server.on("/get", HTTP_ANY, [] (AsyncWebServerRequest *request) {
 
 
   ///beta 
-   bestcosphi = calibrage_cosphi(); 
-  bestpuissance = calibrage_puissance(); 
+   //bestcosphi = calibrage_cosphi(); 
+  //bestpuissance = calibrage_puissance(); 
 }
 
 						//***********************************
@@ -964,7 +964,7 @@ void oscilloscope() {
 //***********************************
 //************* Fonction mesure
 //***********************************
-
+/*
 int mesure () {
 
   temp = 0,
@@ -982,8 +982,8 @@ int mesure () {
  // temp =  analogRead(linky);
   // somme = abs(temp - middle); 
   //somme = abs(somme ); 
-  /*if ( somme < 5 ) { somme = temp - middle ; timer ++; startvalue = temp; }
-  else {somme = 0 ; } */
+  //if ( somme < 5 ) { somme = temp - middle ; timer ++; startvalue = temp; }
+  //else {somme = 0 ; } 
   //startvalue = temp; 
   
 // analyse par volumes
@@ -1013,44 +1013,14 @@ int mesure () {
   return (somme);
 }
 
-
-void somme2() {
-detachInterrupt(digitalPinToInterrupt(sens)) ;
-  int mesure = 85; 
-  int readtime = ( 1000000/(50*mesure)); 
-  int moyenne = 0; 
-  int temp = 0 ;
-  int j = 0;
-
-
-  while (digitalRead(sens) != 1 ) {
-        delayMicroseconds (25);
-   }
-   
-  while (digitalRead(sens) != 0 ) {
-        delayMicroseconds (25);
-   }
-
-    while (digitalRead(sens) != 1 ) {
-    temp =  analogRead(linky); 
-    moyenne = moyenne + temp ;   
-    delayMicroseconds (readtime);
-    j ++;  
-  }
-
-  somme = ( moyenne/j - middle ) ;
-   Serial.println("mesure : ");
-     Serial.println(somme);
-     Serial.println(j);
-
-}
+*/
 
 
 //***********************************
 //************* Fonction valeur moyenne et calcul 
 //***********************************
 void valeur_moyenne() {
-//detachInterrupt(digitalPinToInterrupt(sens)) ;
+
   String log="";
   float moyenne = 0; 
   int temp = 0 ;
@@ -1058,7 +1028,9 @@ void valeur_moyenne() {
   int i = 0; 
   int up = 0; 
   middlevalue = 0;
-  int sommetemp = 0; 
+  int sommetemp = 0;
+  int sommeinverse = 0;  
+  int sommetotale = 0; 
   float demicycle = (goodcycle)/2; 
   int derive = 0 ; 
 
@@ -1079,39 +1051,42 @@ void valeur_moyenne() {
   while (digitalRead(sens) != 1 ) {
     temp =  analogRead(linky); 
   
-    if ( ( j >= config.cosphi )) {  sommetemp += temp;  i++; 
-    log += String(temp) + "-" ; 
-    
-    }
+    if ( ( j >= config.cosphi )) {  
+        sommetemp += temp;  i++; 
+        log += String(temp) + "-" ; 
+        }
     else  {
       log += String(temp) + " " ;
-      
+      sommeinverse += temp; 
       }
     if ( j == config.cosphi ) { startvalue = temp; }
-    if ( temp > max )  { max =temp ; } 
-    if ( temp < min )  { min = temp ; }
-    delayMicroseconds (readtime);
-    j ++;  up ++;
-  }
-
-  while (digitalRead(sens) != 0 ) {
-    temp =  analogRead(linky); 
-  
-    if ( j < (demicycle+config.cosphi) ) { sommetemp += temp; i++;  
-      log += String(temp) + "-" ;
-      }
-    else  {
-      log += String(temp) + " " ;
-      }
-    if ( temp > max )  { max =temp ; } 
+    if ( temp > max )  { max =temp ; up = j; } 
     if ( temp < min )  { min = temp ; }
     delayMicroseconds (readtime);
     j ++;  
   }
 
+  while (digitalRead(sens) != 0 ) {
+    temp =  analogRead(linky); 
+  
+    if ( j < (demicycle+config.cosphi) ) { 
+      sommetemp += temp; i++;  
+      log += String(temp) + "-" ;
+      }
+    else  {
+      log += String(temp) + " " ;
+      sommeinverse += temp; 
+      }
+    if ( temp > max )  { max =temp ; up = j;  } 
+    if ( temp < min )  { min = temp ; }
+    delayMicroseconds (readtime);
+    j ++;  
+  }
 
+  sommetotale = ( sommetemp + sommeinverse ) / j ; 
   moyenne =  ((float(min) + float(max)) / 2.0) ;
   somme = (sommetemp - (moyenne*i)) ; 
+  sommeinverse =  ((moyenne*(j-i)) - sommeinverse ) ; 
   if (  j >= goodcycle ) {goodcycle = j ; }
   
    if ( j >=goodcycle -4  ) {      
@@ -1141,7 +1116,7 @@ void valeur_moyenne() {
      Serial.println(startvalue );
      laststartvalue = startvalue ;
      Serial.println(log);
-     rawdata = log ;
+     rawdata = log + "  \r\n -- phi : " + ( up - (j/4) ) + " -- middle : " + moyenne  +  "-- somme :" + somme + " -- somme inverse : " + sommeinverse + " -- moyenne calcul : "+ sommetotale ;
 
       middle = moyenne ;
       middlevalue = 1; 
@@ -1271,7 +1246,7 @@ void reconnect() {
   }
 }
 
-
+/*
 int calibrage_puissance() {
 
  int lowpower, middlepower, httpCode; 
@@ -1319,4 +1294,4 @@ while ( digitalRead(sens) == 1 )
   return good_cosphi;
 }
 
-
+*/
