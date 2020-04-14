@@ -80,9 +80,9 @@ const String VERSION = "Version 2.7" ;
 
 ////BETA
 //  int freqmesure = 85; 
-  int freqmesure = 97; 
+  int freqmesure = 72; 
   int readtime = ( 1000000/(50*freqmesure)); 
-  int goodcycle = 40;
+  int goodcycle = freqmesure - 5;
   String rawdata = "";
 
 //***********************************
@@ -1031,27 +1031,33 @@ void valeur_moyenne() {
   int sommetemp = 0;
   int sommeinverse = 0;  
   int sommetotale = 0; 
-  float demicycle = (goodcycle)/2; 
+  int demicycle = freqmesure/2; 
   int derive = 0 ; 
 
   int min=1024; 
   int max=0; 
   int startvalue=0; 
-  
+  unsigned long startMillis;
 
+  
+  //// attente du prochain cycle 
 
  while (digitalRead(sens) != 1 ) {
-        delayMicroseconds (25);
+        delayMicroseconds (100);
    }
    
   while (digitalRead(sens) != 0 ) {
-        delayMicroseconds (25);
+        delayMicroseconds (1);
    }
+
+  startMillis = micros();
+
+  ////  calcul de la 1/2 onde 
   
   while (digitalRead(sens) != 1 ) {
-    temp =  analogRead(linky); 
+  temp =  analogRead(linky);
   
-    if ( ( j >= config.cosphi )) {  
+    if ( ( j >= config.cosphi  && j < (demicycle+config.cosphi) )) {  
         sommetemp += temp;  i++; 
         log += String(temp) + "-" ; 
         }
@@ -1062,34 +1068,45 @@ void valeur_moyenne() {
     if ( j == config.cosphi ) { startvalue = temp; }
     if ( temp > max )  { max =temp ; up = j; } 
     if ( temp < min )  { min = temp ; }
-    delayMicroseconds (readtime);
     j ++;  
+    rt_loop( startMillis, readtime*j ) ; 
+    
   }
 
-  while (digitalRead(sens) != 0 ) {
-    temp =  analogRead(linky); 
-  
+  /// calcul de la 2em 1/2 onde 
+  while (digitalRead(sens) != 0 && j != freqmesure ) {
+  temp =  analogRead(linky);
     if ( j < (demicycle+config.cosphi) ) { 
       sommetemp += temp; i++;  
-      log += String(temp) + "-" ;
+       log += String(temp) + "-" ;
       }
     else  {
-      log += String(temp) + " " ;
+       log += String(temp) + " " ;
       sommeinverse += temp; 
       }
     if ( temp > max )  { max =temp ; up = j;  } 
     if ( temp < min )  { min = temp ; }
-    delayMicroseconds (readtime);
-    j ++;  
-  }
-
-  sommetotale = ( sommetemp + sommeinverse ) / j ; 
-  moyenne =  ((float(min) + float(max)) / 2.0) ;
-  somme = (sommetemp - (moyenne*i)) ; 
-  sommeinverse =  ((moyenne*(j-i)) - sommeinverse ) ; 
-  if (  j >= goodcycle ) {goodcycle = j ; }
+    j ++; 
+    rt_loop( startMillis, readtime*j ) ; 
   
-   if ( j >=goodcycle -4  ) {      
+  }
+  // affichage du temps pris
+  startMillis =  micros() - startMillis ;
+  Serial.print("temp: ");
+  Serial.print(startMillis);  
+
+  
+  sommetotale = ( sommetemp + sommeinverse )  ; 
+  //moyenne =  ((float(min) + float(max)) / 2.0) ;
+  //moyenne = 546.5; 
+  moyenne = float(sommetotale) / float(freqmesure) ;
+  
+  somme = (sommetemp - (moyenne*demicycle)) ; 
+  sommeinverse =  ((moyenne*demicycle) - sommeinverse ) ; 
+  //somme =  somme + sommeinverse ; 
+  
+  
+   if ( j >=goodcycle ) {      
     Serial.println("-------------");
      Serial.print("valeur moyenne");
      Serial.println(moyenne);
@@ -1128,7 +1145,26 @@ void valeur_moyenne() {
         }
      
 
+
+
 }
+
+//////////////////////// RT loop
+
+void rt_loop (unsigned long startmicro, unsigned long timer )
+{
+
+while ( micros() <=  ( startmicro + timer ) )
+    {
+    delayMicroseconds(1);
+    }
+
+ 
+}
+
+
+
+
 
 ////////////////////
 int cycle_phi() {
@@ -1189,7 +1225,7 @@ void dimmer(int commande){
   
 	if ( sigma >= 350 && dimmer_power != 0 ) { dimmer_power = 0 ;  change = 1 ;} // si grosse puissance instantanée sur le réseau, coupure du dimmer. ( ici 350w environ ) 
 	else if (commande == 0 && dimmer_power != 0 ) { dimmer_power += -1 ; change = 1; }  /// si mode linky  on reduit la puissance 
-  else if (commande == 1 && sigma <=-75 ) {   dimmer_power += 5*abs(sigma/75) ; change = 1 ; } /// si injection on augmente la puissance 
+  else if (commande == 1 && sigma <= (config.deltaneg-50) ) {   dimmer_power += 5*abs(sigma/50) ; change = 1 ; } /// si injection on augmente la puissance  ( charge de 1 KW ) 
   else if (commande == 1  ) { dimmer_power += 1 ; change = 1 ; } /// si injection on augmente la puissance
   //else if (commande == 1  ) { dimmer_power += round(sigma/(bestpuissance * config.facteur)*100)  ; change = 1 ; } /// si injection on augmente la puissance
   
@@ -1246,52 +1282,4 @@ void reconnect() {
   }
 }
 
-/*
-int calibrage_puissance() {
 
- int lowpower, middlepower, httpCode; 
- lowpower = mesure(); 
- String baseurl; 
- dimmer_power=50;
- baseurl = "/?POWER=" + String(dimmer_power) ; http.begin(config.dimmer,80,baseurl);    httpCode = http.GET();  http.end(); 
- delay(2000); 
- middlepower = mesure(); 
- dimmer_power=0;
- baseurl = "/?POWER=" + String(dimmer_power) ; http.begin(config.dimmer,80,baseurl);    httpCode = http.GET();  http.end();
- delay(500); 
-
- lowpower = ( middlepower - lowpower ) * 2 ; 
-
- return lowpower;  
-    
-}
-
-int calibrage_cosphi() {
- int  httpCode,good_cosphi, maxval; 
- maxval = 0; 
-  String baseurl; 
-  int count = 0;
-  dimmer_power=50;
-  baseurl = "/?POWER=" + String(dimmer_power) ; http.begin(config.dimmer,80,baseurl);    httpCode = http.GET();  http.end(); 
-  delay(2000);
-  front(1);
-  front(0);
-
-while ( digitalRead(sens) == 1 )
-  {
-    temp =  analogRead(linky); 
-    if ( temp >= maxval ) {    maxval = temp; good_cosphi = count ; }
-    delayMicroseconds (config.readtime);
-    count ++;  }
-  
-  
-  dimmer_power = 0;
-  baseurl = "/?POWER=" + String(dimmer_power) ; http.begin(config.dimmer,80,baseurl);    httpCode = http.GET();  http.end();
-  delay(500);
-
-  
-  
-  return good_cosphi;
-}
-
-*/
