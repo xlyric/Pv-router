@@ -2,7 +2,7 @@
 //  Pv router by Cyril Poissonnier 2019 
 //  Pv routeur pour détecter l'injection par mesure de volume et envoie d'information sur domoticz 
 //  pour réponse ( switch, dimmer ... ) 
-//  fait pour fonctionner avec le circuit imprimé v1.1 à 1.3
+//  fait pour fonctionner avec le circuit imprimé v1.1 à 1.4
 /////////////////////////
 
 ///////////////////
@@ -75,8 +75,6 @@
 
 const String VERSION = "Version 2.7" ;
 
-// class interrupts
-//void ICACHE_RAM_ATTR valeur_moyenne();
 
 ////BETA
 //  int freqmesure = 85; 
@@ -173,7 +171,7 @@ void loadConfiguration(const char *filename, Config &config) {
 
    strlcpy(config.mqttserver,                  // <- destination
           doc["mqttserver"] | "192.168.1.20", // <- source
-          sizeof(config.hostname));         // <- destination's capacity
+          sizeof(config.mqttserver));         // <- destination's capacity
   configFile.close();
       
 }
@@ -245,9 +243,6 @@ int dimmer_security_count = 0;
 //***********************************
 #define ONE_WIRE_BUS 7
 #define TEMPERATURE_PRECISION 10
-//OneWire oneWire(ONE_WIRE_BUS);
-//DallasTemperature sensors(&oneWire);
-//DeviceAddress Thermometer_ECS = { 0x28,  0xD4,  0xB0,  0x26,  0x0,  0x0,  0x80,  0xBC };
 
 //***********************************
 //************* Time 
@@ -255,7 +250,7 @@ int dimmer_security_count = 0;
 const long utcOffsetInSeconds = 3600;
 char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP, "pool.ntp.org", utcOffsetInSeconds);
+NTPClient timeClient(ntpUDP, "europe.pool.ntp.org", utcOffsetInSeconds);
 int timesync = 0; 
 int timesync_refresh = 120; 
 
@@ -284,9 +279,8 @@ SSD1306Wire  display(0x3c, D1, D2);
 #define OLED 1  // activation de l'afficheur oled
 #define attente 2 /// nombre de 1/2 secondes entre chaque cycle de mesure.
 
-//int middle = 541;  /// recalculé automatiquement à chaque cycle
 int middle ;
-int front_size=19 ; // ( n +1 )  cycle d'onde de 36 mesures ( 360°/10 soit 10° d'onde par mesure ) 
+
 
 //constantes de fonctionnement
 #define USE_SERIAL  Serial
@@ -294,15 +288,11 @@ int front_size=19 ; // ( n +1 )  cycle d'onde de 36 mesures ( 360°/10 soit 10°
 #define lcd_scd D1  // LCD et OLED
 #define lcd_scl D2  // LCD et OLED 
 #define sens D5   /// niveau de la diode 
-#define pinreset 1 /// si D0 et reset connecté >> 1
-int num_fuse = 50 ; /// limitation de la puissance du dimmer numérique à 50% 
 int dimmer_power = 0;
 int security=0; // envoie régulier de 0 vers le dimmer dans certains cas 
 
 /// constantes de debug 
-// #define debug 1  // recherche la valeur milieu >> middle   
 #define modeserial 0
-// #define oscillo 1   /// affichage de l'oscillo sur le server web. 
 //int inversion = 0 ; 
 int phi;
 int somme, sigma ;
@@ -315,11 +305,11 @@ int moyenne, laststartvalue;
 String message; 
 String configweb , memory, inputMessage;
 int inj_mode = 0 ; 
-int RMS = 0 ;
+//int RMS = 0 ;
 bool change;
-String serialmessage; 
+//String serialmessage; 
 bool middlevalue=0;
-bool simgavalue=0;
+
 
 
 int bestcosphi, bestpuissance; 
@@ -385,12 +375,6 @@ String getSendmode() {
   return String(sendmode);
 }
 
-String getserial() {
-  String(sendserial);
-  sendserial=serialmessage;
-  serialmessage="";
-  return String(sendserial);
-}
 
 
 String getServermode(String Servermode) {
@@ -435,7 +419,7 @@ String getchart() {
 }
 
 String getdebug() {
-  configweb = String(ESP.getFreeHeap())+ ";" + String(laststartvalue)  + ";" +  String(middle) + ";" +  String(front_size) +";"+ phi +";"+ dimmer_power + ";"+ RMS;
+  configweb = String(ESP.getFreeHeap())+ ";" + String(laststartvalue)  + ";" +  String(middle) + ";" +  phi +";"+ dimmer_power ;
     return String(configweb);
 }
 
@@ -534,7 +518,7 @@ void setup() {
 		//************* Setup - OTA 
 		//***********************************
 		
-  ArduinoOTA.setHostname("PV Routeur beta");
+  ArduinoOTA.setHostname("PV Routeur");
   //ArduinoOTA.setPassword(otapassword);
   ArduinoOTA.onStart([]() {
     Serial.println("Start");
@@ -697,10 +681,15 @@ server.on("/get", HTTP_ANY, [] (AsyncWebServerRequest *request) {
   client.setServer(config.mqttserver, 1883);
   mqtt(config.IDXdimmer,"0"); 
 
+  /// reset dimmer
+  int httpCode;
+  String baseurl; 
+   dimmer_power=0;
+   baseurl = "/?POWER=" + String(dimmer_power) ; http.begin(config.dimmer,80,baseurl);    httpCode = http.GET();  http.end();
+   delay(5000); 
+  
 
-  ///beta 
-   //bestcosphi = calibrage_cosphi(); 
-  //bestpuissance = calibrage_puissance(); 
+ 
 }
 
 						//***********************************
@@ -709,21 +698,18 @@ server.on("/get", HTTP_ANY, [] (AsyncWebServerRequest *request) {
 
 
 void loop() {
-//const int deltaneg = 50 - config.delta ; // décalage de la sensibilité pour l'injection
+
 /// preparation des mesures
   temp = 0; 
   timer = 0 ; 
-  //int dimmer = 0;
+
   somme = 0; 
   int i = 0;
   int validation = 0;
 
 // lecture de la valeur moyenne 
    
-  // attachInterrupt(digitalPinToInterrupt(sens), valeur_moyenne, RISING);  
   valeur_moyenne();
-//   delay (20);
-//   middle = valeur_moyenne() ;
 
 /// recherche d'un cycle stable
   if ( middlevalue == 1 ) {
@@ -843,10 +829,6 @@ void affiche_info_main() {
   display.setTextAlignment(TEXT_ALIGN_LEFT);
 
   ////// affichage de l'état conf
-
-	//if ( debug == 1 ) {   display.drawString(0,27, "Debug");  }
-	if ( modeserial == 1 ) {   display.drawString(0,38, "Serial"); }
-
   display.drawString(0,54, VERSION );
   affiche_info_transmission(config.sending);
   
@@ -938,7 +920,7 @@ void oscilloscope() {
   front (0);
   front(1);
   delayMicroseconds (config.cosphi*config.readtime); // correction décalage
-  while ( timer < ( config.cycle ) )
+  while ( timer < ( freqmesure ) )
   {
 
   
@@ -1095,15 +1077,32 @@ void valeur_moyenne() {
   Serial.print("temp: ");
   Serial.print(startMillis);  
 
-  
+
   sommetotale = ( sommetemp + sommeinverse )  ; 
-  //moyenne =  ((float(min) + float(max)) / 2.0) ;
-  //moyenne = 546.5; 
-  moyenne = float(sommetotale) / float(freqmesure) ;
   
+  moyenne = float(sommetotale) / float(freqmesure) ;
+  float moyenne2 =  ((float(min) + float(max)) / 2.0) ;
+  float moyenne3 = config.cycle; 
+  
+
   somme = (sommetemp - (moyenne*demicycle)) ; 
-  sommeinverse =  ((moyenne*demicycle) - sommeinverse ) ; 
-  //somme =  somme + sommeinverse ; 
+  float somme2 = (sommetemp - (moyenne2*demicycle)) ; 
+  float somme3 = (sommetemp - (moyenne3*demicycle)) ; 
+
+    
+  //sommeinverse = (sommeinverse - (moyenne*demicycle) ); 
+  //somme =  (somme + sommeinverse)/2 ; 
+  float inverse1 =  (sommeinverse - (moyenne*demicycle)); 
+  float inverse2 =  (sommeinverse - (moyenne2*demicycle)) ; 
+  float inverse3 =  (sommeinverse - (moyenne3*demicycle)) ; 
+
+/*
+
+sommetotale = ( sommetemp + sommeinverse )  ; 
+moyenne = float(sommetotale) / float(freqmesure);  
+somme = (sommetemp - (moyenne*demicycle)) - (sommeinverse - (moyenne*demicycle)) ; 
+somme = sommetemp - sommeinverse ; 
+*/
   
   
    if ( j >=goodcycle ) {      
@@ -1133,10 +1132,14 @@ void valeur_moyenne() {
      Serial.println(startvalue );
      laststartvalue = startvalue ;
      Serial.println(log);
-     rawdata = log + "  \r\n -- phi : " + ( up - (j/4) ) + " -- middle : " + moyenne  +  "-- somme :" + somme + " -- somme inverse : " + sommeinverse + " -- moyenne calcul : "+ sommetotale ;
+     rawdata = log + "  \r\n -- phi : " + ( up - (j/4) ) +  " somme : " + sommetemp  + " -- somme inverse : " + sommeinverse + "\r\n -- middle : " + moyenne  +  "-- somme :" + somme +  "-- inv :" + inverse1 + "  \r\n -- moyenne 2 : " +  moyenne2 + " : " + somme2 + "-- inv :" + inverse2 + " total " + (somme2 - inverse2 )/2 + " \r\n -- moyenne 3 : " +  moyenne3 + " : " + somme3 + "-- inv :" + inverse3 + " total " + (somme3 - inverse3 )/2 ;
 
       middle = moyenne ;
       middlevalue = 1; 
+
+      long rssi = WiFi.RSSI();
+      Serial.print("RSSI:");
+      Serial.println(rssi);
                 }
 
    else { 
@@ -1164,53 +1167,35 @@ while ( micros() <=  ( startmicro + timer ) )
 
 
 
-
-
-////////////////////
-int cycle_phi() {
-
-int count = 0; 
-
-  front(1);
-  front(0);
-
-while ( digitalRead(sens) == 1 )
-  {
-    temp =  analogRead(linky); 
-    if ( temp > moyenne ) {
-    delayMicroseconds (config.readtime);
-    count ++;  }
-  } 
-
-return (count);
-}
-
-
 //***********************************
 //************* Fonction domotique 
 //***********************************
 
 boolean SendToDomotic(String Svalue){
   String baseurl; 
-  Serial.print("connecting to ");
+  Serial.print("connecting to mqtt & dimmer");
   Serial.println(config.hostname);
-  Serial.print("Requesting URL: ");
+  //Serial.print("Requesting URL: ");
 
-  if ( config.UseDomoticz == 1 ) { baseurl = "/json.htm?type=command&param=udevice&idx="+config.IDX+"&nvalue=0&svalue="+Svalue;  http.begin(config.hostname,config.port,baseurl); }
-  if ( config.UseJeedom == 1 ) {  baseurl = "/core/api/jeeApi.php?apikey=" + String(config.apiKey) + "&type=virtual&id="+ config.IDX + "&value=" + Svalue; http.begin(config.hostname,config.port,baseurl);  }
+  //if ( config.UseDomoticz == 1 ) { baseurl = "/json.htm?type=command&param=udevice&idx="+config.IDX+"&nvalue=0&svalue="+Svalue;  http.begin(config.hostname,config.port,baseurl); }
+  //if ( config.UseJeedom == 1 ) {  baseurl = "/core/api/jeeApi.php?apikey=" + String(config.apiKey) + "&type=virtual&id="+ config.IDX + "&value=" + Svalue; http.begin(config.hostname,config.port,baseurl);  }
   if ( config.mqtt == 1 ) {     mqtt(config.IDX,Svalue);  }
   Serial.println(baseurl);
 
   // http.begin(config.hostname,config.port,baseurl);
-  int httpCode = http.GET();
-  Serial.println("closing connection");
-  http.end();
+  //int httpCode = http.GET();
+  //Serial.println("closing connection");
+  //http.end();
 
   if ( config.autonome == 1 && change == 1   ) {  baseurl = "/?POWER=" + String(dimmer_power) ; http.begin(config.dimmer,80,baseurl);   int httpCode = http.GET();
     http.end(); 
     if ( config.mqtt == 1 ) { mqtt(config.IDXdimmer, String(dimmer_power));  }
+
+      
+    
     }
 
+valeur_moyenne();  
  
 }
 
@@ -1224,8 +1209,9 @@ void dimmer(int commande){
   
   
 	if ( sigma >= 350 && dimmer_power != 0 ) { dimmer_power = 0 ;  change = 1 ;} // si grosse puissance instantanée sur le réseau, coupure du dimmer. ( ici 350w environ ) 
+	else if (commande == 0 && dimmer_power != 0 && sigma >= (config.delta+20) ) { dimmer_power += -2*((sigma-config.delta)/50) ; change = 1; }  /// si mode linky  on reduit la puissance 
 	else if (commande == 0 && dimmer_power != 0 ) { dimmer_power += -1 ; change = 1; }  /// si mode linky  on reduit la puissance 
-  else if (commande == 1 && sigma <= (config.deltaneg-50) ) {   dimmer_power += 5*abs(sigma/50) ; change = 1 ; } /// si injection on augmente la puissance  ( charge de 1 KW ) 
+  else if (commande == 1 && sigma <= (config.deltaneg-20) ) {   dimmer_power += 2*abs(sigma/50) ; change = 1 ; } /// si injection on augmente la puissance  ( charge de 1 KW ) 
   else if (commande == 1  ) { dimmer_power += 1 ; change = 1 ; } /// si injection on augmente la puissance
   //else if (commande == 1  ) { dimmer_power += round(sigma/(bestpuissance * config.facteur)*100)  ; change = 1 ; } /// si injection on augmente la puissance
   
@@ -1237,6 +1223,7 @@ if (commande == 2  ) { change = 1 ; } /// mode stabilisé, envoie de sigma de te
 
 security ++ ;
 if ( security >= 5 ) { if ( dimmer_power <= 0 ) {dimmer_power = 0; change = 1 ; security = 0;  }} 
+
 
 }
 
@@ -1269,7 +1256,7 @@ void reconnect() {
     if (client.connect(clientId.c_str())) {
       Serial.println("connected");
       // Once connected, publish an announcement...
-      client.publish("outTopic", "hello world");
+      client.publish("outTopic", "hello world it's me !! PvRouter ");
       // ... and resubscribe
       client.subscribe("inTopic");
     } else {
@@ -1281,5 +1268,47 @@ void reconnect() {
     }
   }
 }
+/*
+int getBarsSignal(long rssi){
+  // 5. High quality: 90% ~= -55db
+  // 4. Good quality: 75% ~= -65db
+  // 3. Medium quality: 50% ~= -75db
+  // 2. Low quality: 30% ~= -85db
+  // 1. Unusable quality: 8% ~= -96db
+  // 0. No signal
+  int bars;
+  
+  if (rssi > -55) { 
+    bars = 5;
+  } else if (rssi < -55 & rssi > -65) {
+    bars = 4;
+  } else if (rssi < -65 & rssi > -75) {
+    bars = 3;
+  } else if (rssi < -75 & rssi > -85) {
+    bars = 2;
+  } else if (rssi < -85 & rssi > -96) {
+    bars = 1;
+  } else {
+    bars = 0;
+  }
+  return bars;
+}
 
 
+void affiche_heure() 
+{
+String ActualTime = timeClient.getFormattedTime();
+//String ActualTime = timeClient.getHours()+":"+timeClient.getMinutes() ;
+  display.setColor(BLACK);
+  display.fillRect(28, 28, 38, 38);
+  
+  display.setColor(WHITE);
+  display.setTextAlignment(TEXT_ALIGN_LEFT);
+  display.setFont(ArialMT_Plain_10);
+  display.drawString(0,28,ActualTime);
+ 
+  display.display();
+
+  
+}
+*/
