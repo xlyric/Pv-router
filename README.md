@@ -88,6 +88,7 @@ and for SPIFFS python ~/esptool.py --port /dev/ttyUSB4 --baud 115200 write_flash
 
 and for windows : 
 esptool.py --port com3 --baud 256000 write_flash 0x00000 pvrouter.nodemcu.bin 
+
 esptool.py --port com3 --baud 256000 write_flash 0x00200000 spiffs.img 
 
 Wifiautoconnect password : pvrouter 
