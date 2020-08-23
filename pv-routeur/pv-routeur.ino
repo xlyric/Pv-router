@@ -309,7 +309,7 @@ int inj_mode = 0 ;
 bool change;
 //String serialmessage; 
 bool middlevalue=0;
-
+int bypassfalse=0;
 
 
 int bestcosphi, bestpuissance; 
@@ -712,7 +712,7 @@ void loop() {
   valeur_moyenne();
 
 /// recherche d'un cycle stable
-  if ( middlevalue == 1 ) {
+  if ( middlevalue == 1 || bypassfalse >= 5 ) {
  
 sigma = somme * config.facteur ;
 
@@ -763,6 +763,10 @@ sigma = somme * config.facteur ;
   affiche_info_volume(sigma);
   if (config.autonome == 1 ) {dimmer(inj_mode); }
 
+  }
+  else 
+  {
+    bypassfalse++;
   }
 
 
@@ -1105,7 +1109,7 @@ somme = sommetemp - sommeinverse ;
 */
   
   
-   if ( j >=goodcycle ) {      
+   if ( j >=goodcycle || bypassfalse >= 5  ) {      
     Serial.println("-------------");
      Serial.print("valeur moyenne");
      Serial.println(moyenne);
