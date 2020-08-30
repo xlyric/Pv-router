@@ -7,12 +7,7 @@
 
 ///////////////////
 // ----- configuration  
-//  la valeur de la fréquence d échantillonage est modifiable mais déconseillé. 
-//  calcul pour cos phi = 0 avec une charge résistive récupérable sur  /debug  ( int  représentant le nb de cycle avant passage par 0 ( middle ) ) 
-//  puis la valeur de cos phi sur une valeur max obtenu à la lecture directe. 
-//  valeur à entrer dans /get?cosphi=x ( préreglé à 12 ) en cas d'inversion de branchement de la sonde, ajouter 18 ( 1/2 cycle ) >> 30
-//  le cycle de mesure est de 555ms ( /get?reatime = 555 pour 36 mesures par onde ( 50hz - 20ms ). 
-//  la prise de donnée oscillo est définie par  /get?cycle=72 ( 72 mesures ) 
+// la prise de valeur est de 72 échantillons par cycles
 //  ----- envoie vers serveur domotique
 //  la programmation par défaut n'envoie pas vers domoticz  ou jeedom, il faut l'activer sur l'interface et sauvegarder la configuration
 //  pour le mode autonome, il est possible de spécifier directement l'ip du dimmer numérique distant ( dans le fichier de conf ). la communication doit aussi être active pour fonctionner.
@@ -21,6 +16,13 @@
 // ----- sauvegarde de la configuration --- 
 //  faire un /get?save pour sauver la configuration dans le fichier
 //  sauvegarde du fichier de config : /Config.json
+//  
+//  /cosphi permet d'avoir des logs sur le calcul du middle et de la valeur retourné :
+// valeurs lu  -- calcul du phi conseillé - calcul des sommes et de différent type de calcul de moyennes
+// 
+//
+//  Ajout de la fonction 
+// /get?reset pour redémarrer le pv routeur
 //  
 /////////////////////////
 /**************
@@ -132,7 +134,7 @@ void loadConfiguration(const char *filename, Config &config) {
   // Deserialize the JSON document
   DeserializationError error = deserializeJson(doc, configFile);
   if (error)
-    Serial.println(F("Failed to read file, using default configuration"));
+    Serial.println(F("Failed to read file, using default configuration in function loadConfiguration"));
 
   // Copy values from the JsonDocument to the Config
   config.port = doc["port"] | 8080;
@@ -144,7 +146,7 @@ void loadConfiguration(const char *filename, Config &config) {
           doc["apiKey"] | "Myapikeystring", // <- source
           sizeof(config.apiKey));         // <- destination's capacity
 		  
-  config.UseDomoticz = doc["UseDomoticz"] | true; 
+  config.UseDomoticz = doc["UseDomoticz"] | false; 
   config.UseJeedom = doc["UseJeedom"] | false; 
   config.IDX = doc["IDX"] | 62; 
   config.IDXdimmer = doc["IDXdimmer"] | 60; 
@@ -153,17 +155,17 @@ void loadConfiguration(const char *filename, Config &config) {
           doc["otapassword"] | "Pvrouteur2", // <- source
           sizeof(config.otapassword));         // <- destination's capacity
   
-  config.facteur = doc["facteur"] | 0.8; 
+  config.facteur = doc["facteur"] | 0.86; 
   config.delta = doc["delta"] | 50; 
-  config.num_fuse = doc["fuse"] | 50;
-  config.deltaneg = doc["deltaneg"] | 0; 
-  config.cosphi = doc["cosphi"] | 20; 
+  config.num_fuse = doc["fuse"] | 70;
+  config.deltaneg = doc["deltaneg"] | -100; 
+  config.cosphi = doc["cosphi"] | 23; 
   config.readtime = doc["readtime"] | 555;
   config.cycle = doc["cycle"] | 25;
   config.tmax = doc["tmax"] | 65;
   config.sending = doc["sending"] | false;
   config.autonome = doc["autonome"] | true;
-  config.mqtt = doc["mqtt"] | true;
+  config.mqtt = doc["mqtt"] | false;
   config.dimmerlocal = doc["dimmerlocal"] | false;
   strlcpy(config.dimmer,                  // <- destination
           doc["dimmer"] | "192.168.1.20", // <- source
@@ -185,7 +187,7 @@ void saveConfiguration(const char *filename, const Config &config) {
   // Open file for writing
    File configFile = SPIFFS.open(filename_conf, "w");
   if (!configFile) {
-    Serial.println(F("Failed to open config file for writing"));
+    Serial.println(F("Failed to open config file for writing in function Save configuration"));
     return;
   }
 
@@ -220,7 +222,7 @@ void saveConfiguration(const char *filename, const Config &config) {
 
   // Serialize JSON to file
   if (serializeJson(doc, configFile) == 0) {
-    Serial.println(F("Failed to write to file"));
+    Serial.println(F("Failed to write to file in function Save configuration "));
   }
 
   // Close the file
@@ -361,6 +363,7 @@ const char* PARAM_INPUT_dimmer_power = "POWER"; /// paramettre de retour activat
 const char* PARAM_INPUT_facteur = "facteur"; /// paramettre retour delta
 const char* PARAM_INPUT_tmax = "tmax"; /// paramettre retour delta
 const char* PARAM_INPUT_mqttserver = "mqttserver"; /// paramettre retour mqttserver
+const char* PARAM_INPUT_reset = "reset"; /// paramettre retour mqttserver
 
 String stringbool(bool mybool){
   String truefalse = "true";
@@ -513,7 +516,7 @@ void setup() {
   Serial.println(WiFi.localIP()); 
   Serial.println(ESP.getResetReason());
   // mqtt
-  client.connect("pvrouter");
+  if (config.mqtt==1) { client.connect("pvrouter"); }
 		//***********************************
 		//************* Setup - OTA 
 		//***********************************
@@ -647,7 +650,8 @@ server.on("/get", HTTP_ANY, [] (AsyncWebServerRequest *request) {
    if (request->hasParam(PARAM_INPUT_dimmer_power)) {dimmer_power = request->getParam( PARAM_INPUT_dimmer_power)->value().toInt(); change = 1 ;  } 
    if (request->hasParam(PARAM_INPUT_facteur)) { config.facteur = request->getParam(PARAM_INPUT_facteur)->value().toFloat();}
    if (request->hasParam(PARAM_INPUT_tmax)) { config.tmax = request->getParam(PARAM_INPUT_tmax)->value().toInt();}
-   
+   //reset
+   if (request->hasParam(PARAM_INPUT_reset)) {Serial.println("Resetting ESP");  ESP.restart();}
    
    
    if (request->hasParam(PARAM_INPUT_servermode)) { inputMessage = request->getParam( PARAM_INPUT_servermode)->value();
@@ -678,8 +682,8 @@ server.on("/get", HTTP_ANY, [] (AsyncWebServerRequest *request) {
   server.begin(); 
   affiche_info_main();
   
-  client.setServer(config.mqttserver, 1883);
-  mqtt(config.IDXdimmer,"0"); 
+  if (config.mqtt==1) { client.setServer(config.mqttserver, 1883);
+  mqtt(config.IDXdimmer,"0");  }
 
   /// reset dimmer
   int httpCode;
@@ -1033,14 +1037,14 @@ void valeur_moyenne() {
    }
    
   while (digitalRead(sens) != 0 ) {
-        delayMicroseconds (1);
+        delayMicroseconds (10);
    }
 
   startMillis = micros();
 
   ////  calcul de la 1/2 onde 
-  
-  while (digitalRead(sens) != 1 ) {
+  //// rajout de la condition && j < (demicycle-20)  pour éviter les rebonds 
+  while (digitalRead(sens) != 1 && j < (demicycle-20) ) {
   temp =  analogRead(linky);
   
     if ( ( j >= config.cosphi  && j < (demicycle+config.cosphi) )) {  
@@ -1136,8 +1140,7 @@ somme = sommetemp - sommeinverse ;
      Serial.println(startvalue );
      laststartvalue = startvalue ;
      Serial.println(log);
-     rawdata = log + "  \r\n -- phi : " + ( up - (j/4) ) +  " somme : " + sommetemp  + " -- somme inverse : " + sommeinverse + "\r\n -- middle : " + moyenne  +  "-- somme :" + somme +  "-- inv :" + inverse1 + "  \r\n -- moyenne 2 : " +  moyenne2 + " : " + somme2 + "-- inv :" + inverse2 + " total " + (somme2 - inverse2 )/2 + " \r\n -- moyenne 3 : " +  moyenne3 + " : " + somme3 + "-- inv :" + inverse3 + " total " + (somme3 - inverse3 )/2 ;
-
+     
       middle = moyenne ;
       middlevalue = 1; 
 
@@ -1150,7 +1153,8 @@ somme = sommetemp - sommeinverse ;
       Serial.println("erreur cycle :");
       Serial.println(j);
         }
-     
+  /// retrait de rowdata de la condition pour debug    
+rawdata = log + "  \r\n -- phi : " + ( up - (j/4) ) +  " somme : " + sommetemp  + " -- somme inverse : " + sommeinverse + "\r\n -- middle : " + moyenne  +  "-- somme :" + somme +  "-- inv :" + inverse1 + "  \r\n -- moyenne 2 : " +  moyenne2 + " : " + somme2 + "-- inv :" + inverse2 + " total " + (somme2 - inverse2 )/2 + " \r\n -- moyenne 3 : " +  moyenne3 + " : " + somme3 + "-- inv :" + inverse3 + " total " + (somme3 - inverse3 )/2 +" temps" + startMillis;
 
 
 
@@ -1238,9 +1242,9 @@ void mqtt(String idx, String value)
   if ( value != "0" ) { nvalue = "2" ; }
 String message = "  { \"idx\" : " + idx +" ,   \"svalue\" : \"" + value + "\",  \"nvalue\" : " + nvalue + "  } ";
 
-  /*if (!client.connected()) {
+  if (!client.connected()) {
     reconnect();
-  }*/
+  }
   client.loop();
   client.publish("domoticz/in", String(message).c_str(), true);
   
