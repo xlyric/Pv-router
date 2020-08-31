@@ -849,7 +849,7 @@ void affiche_info_main() {
 
 void affiche_info_transmission (int transmission ){
   display.setColor(BLACK);
-  display.fillRect(0, 16, 50, 26);
+  display.fillRect(0, 16, 50, 10);
   
   display.setColor(WHITE);
   display.setTextAlignment(TEXT_ALIGN_LEFT);
@@ -861,10 +861,11 @@ void affiche_info_transmission (int transmission ){
 }
 
 // ***********************************
-// ************* affichage du sigma
+// ************* affichage du sigma et heure
 // ***********************************
 
 void affiche_info_volume(int volume ) {
+  affiche_heure(); // Affichage de l'heure
   display.setColor(BLACK);
   display.fillRect(55, 30, 128, 64);
   
@@ -897,6 +898,44 @@ void affiche_info_injection(int injection_mode ) {
   
   display.display();
 }
+
+// ***********************************
+// ************* affichage des delta
+// ***********************************
+
+void affiche_info_delat() {
+
+display.setColor(BLACK);
+display.fillRect(0, 27, 55, 28);
+
+display.setColor(WHITE);
+display.setTextAlignment(TEXT_ALIGN_LEFT);
+display.setFont(ArialMT_Plain_10);
+display.drawString(0,29, "Delta : " + String(config.delta));
+display.drawString(0,41, "Neg : " + String(config.deltaneg));
+
+display.display();
+}
+
+// ***********************************
+// ************* affichage Heure
+// ***********************************
+void affiche_heure()
+{
+String ActualTime = timeClient.getFormattedTime();
+//String ActualTime = timeClient.getHours()+":"+timeClient.getMinutes() ;
+display.setColor(BLACK);
+display.fillRect(0, 27, 55, 28);
+
+display.setColor(WHITE);
+display.setTextAlignment(TEXT_ALIGN_LEFT);
+display.setFont(ArialMT_Plain_10);
+display.drawString(0,29, ActualTime);
+//display.drawString(0,41, "Neg : " + String(config.deltaneg));
+
+display.display();
+}
+
 
 // ***********************************
 // ************* affichage logo transmission
@@ -1044,7 +1083,7 @@ void valeur_moyenne() {
 
   ////  calcul de la 1/2 onde 
   //// rajout de la condition && j < (demicycle-20)  pour éviter les rebonds 
-  while (digitalRead(sens) != 1 && j < (demicycle-20) ) {
+  while (digitalRead(sens) != 1 && j < (demicycle) ) {
   temp =  analogRead(linky);
   
     if ( ( j >= config.cosphi  && j < (demicycle+config.cosphi) )) {  
@@ -1062,7 +1101,7 @@ void valeur_moyenne() {
     rt_loop( startMillis, readtime*j ) ; 
     
   }
-
+  log += + "++" ;
   /// calcul de la 2em 1/2 onde 
   while (digitalRead(sens) != 0 && j != freqmesure ) {
   temp =  analogRead(linky);
