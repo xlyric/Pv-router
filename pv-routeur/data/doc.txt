@@ -47,4 +47,5 @@ ou esptool.py --port com3 --baud 256000 write_flash 0x00200000 spiffs.img
 
 - Oled qui ne s'allume pas: carte lolin V1.2 l'oled + est branché sur la pin VU et il faut le brancher le + sur la pin VI. 
 
+- activation du MQTT, necessite un reset pour l'enregistrement (/get?reset ) 
 
