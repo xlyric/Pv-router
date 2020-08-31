@@ -76,7 +76,7 @@
 #include "images.h"
 
 const String VERSION = "Version 2.7" ;
-
+String logs;
 
 ////BETA
 //  int freqmesure = 85; 
@@ -129,13 +129,17 @@ void loadConfiguration(const char *filename, Config &config) {
   // Allocate a temporary JsonDocument
   // Don't forget to change the capacity to match your requirements.
   // Use arduinojson.org/v6/assistant to compute the capacity.
-  StaticJsonDocument<512> doc;
+  StaticJsonDocument<1024> doc;
 
   // Deserialize the JSON document
   DeserializationError error = deserializeJson(doc, configFile);
-  if (error)
+  if (error) {
     Serial.println(F("Failed to read file, using default configuration in function loadConfiguration"));
+    logs += "Failed to read file, using default configuration in function loadConfiguration/r/n";
 
+  }
+
+  
   // Copy values from the JsonDocument to the Config
   config.port = doc["port"] | 8080;
   strlcpy(config.hostname,                  // <- destination
@@ -188,6 +192,7 @@ void saveConfiguration(const char *filename, const Config &config) {
    File configFile = SPIFFS.open(filename_conf, "w");
   if (!configFile) {
     Serial.println(F("Failed to open config file for writing in function Save configuration"));
+    logs += "Failed to open config file for writing in function Save configuration/r/n";
     return;
   }
 
@@ -223,6 +228,7 @@ void saveConfiguration(const char *filename, const Config &config) {
   // Serialize JSON to file
   if (serializeJson(doc, configFile) == 0) {
     Serial.println(F("Failed to write to file in function Save configuration "));
+    logs += "Failed to write to file in function Save configuration:r/n";
   }
 
   // Close the file
@@ -412,7 +418,7 @@ String getpuissance() {
 
 String getconfig() {
     
-  configweb = String(config.hostname) + ";" +  config.port + ";"  + config.IDX + ";"  +  VERSION +";" + middle +";"+ config.delta +";"+config.cycle+";"+config.dimmer+";"+config.cosphi+";"+config.readtime +";"+stringbool(config.UseDomoticz)+";"+stringbool(config.UseJeedom)+";"+stringbool(config.autonome)+";"+config.apiKey+";"+stringbool(config.dimmerlocal)+";"+config.facteur;
+  configweb = String(config.hostname) + ";" +  config.port + ";"  + config.IDX + ";"  +  VERSION +";" + middle +";"+ config.delta +";"+config.cycle+";"+config.dimmer+";"+config.cosphi+";"+config.readtime +";"+stringbool(config.UseDomoticz)+";"+stringbool(config.UseJeedom)+";"+stringbool(config.autonome)+";"+config.apiKey+";"+stringbool(config.dimmerlocal)+";"+config.facteur+";"+stringbool(config.mqtt)+";"+config.mqttserver+";"+config.deltaneg;
   return String(configweb);
 }
 
@@ -431,6 +437,12 @@ String getmemory() {
     memory = String(ESP.getFreeHeap()) + ";" + String(ESP.getHeapFragmentation()) + ";" + String(ESP.getMaxFreeBlockSize());
       return String(memory);
 }
+
+String getlogs() {
+    
+      return String(logs);
+}
+
 
 String processor(const String& var){
    Serial.println(var);
@@ -473,6 +485,7 @@ void setup() {
   // vérification de la présence d'index.html
   if(!SPIFFS.exists("/index.html")){
     Serial.println("Attention fichiers SPIFFS non chargé sur l'ESP, ça ne fonctionnera pas.");  
+    logs += "Attention fichiers SPIFFS non chargé sur l'ESP, ça ne fonctionnera pas.";
     }
   
 		//***********************************
@@ -481,10 +494,12 @@ void setup() {
   
   // Should load default config if run for the first time
   Serial.println(F("Loading configuration..."));
+   logs += "Loading configuration.../r/n";
   loadConfiguration(filename_conf, config);
 
   // Create configuration file
   Serial.println(F("Saving configuration..."));
+  logs += "Saving configuration... /r/n";
   saveConfiguration(filename_conf, config);
   
 
@@ -604,6 +619,10 @@ void setup() {
 
   server.on("/debug", HTTP_ANY, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/plain", getdebug().c_str());
+  });
+
+  server.on("/log", HTTP_ANY, [](AsyncWebServerRequest *request){
+    request->send_P(200, "text/plain", getlogs().c_str());
   });
 
 server.on("/config.json", HTTP_ANY, [](AsyncWebServerRequest *request){
