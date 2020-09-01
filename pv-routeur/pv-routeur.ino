@@ -75,7 +75,7 @@
 // Include custom images
 #include "images.h"
 
-const String VERSION = "Version 2.7" ;
+const String VERSION = "Version 2.8" ;
 String logs;
 
 ////BETA
