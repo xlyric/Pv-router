@@ -262,14 +262,14 @@
 				<div class="form-group">
                       <div class="custom-control custom-checkbox small">
 						<input type="checkbox" class="custom-control-input" id="autonome">
-                        <label class="custom-control-label" for="autonome" onclick="sendservermode(this.innerHTML);" >autonome</label>
+                        <label class="custom-control-label" for="autonome" onclick="sendservermode(this.innerHTML);" >Autonome</label>
                       </div>
                 </div>
 				
 				<div class="form-group">
                       <div class="custom-control custom-checkbox small">
 						<input type="checkbox" class="custom-control-input" id="Usemqtt">
-                        <label class="custom-control-label" for="Usemqtt" onclick="sendservermode(this.innerHTML);" >mqtt</label>
+                        <label class="custom-control-label" for="Usemqtt" onclick="sendservermode(this.innerHTML);" >MQTT</label>
                       </div>
                 </div
 				<div class="form-group">
@@ -279,8 +279,9 @@
 
 				
 				<div class="form-group row">
-				 <div class="col-sm-3">delta</div>
-				  <div class="col-sm-3">deltaneg</div>
+				 <div class="col-sm-3">Limite Consommation (Delta) </div>
+				  <div class="col-sm-3">Limite Injection (deltaneg) </div>
+				  <div class="col-sm-3">Charge connectée/W </div>
 				 
 
 				</div>
@@ -292,13 +293,16 @@
 				  <div class="col-sm-3">
 				  <input type="text" class="form-control form-control-user" id="deltaneg" placeholder="%DELTANEG%">
                   </div>
+				  <div class="col-sm-3">
+				  <input type="text" class="form-control form-control-user" id="resistance" placeholder="%RESISTANCE%">
+                  </div>
 				  
 				  
 		        </div>
 				
 				<div class="form-group row">
-				 <div class="col-sm-3">cosphi</div>
-				 <div class="col-sm-3">facteur</div>
+				 <div class="col-sm-3">Cosphi</div>
+				 <div class="col-sm-3">Facteur de correction</div>
 				</div>
 				<div class="form-group row">
                   <div class="col-sm-3">
@@ -428,7 +432,7 @@ $( "#save" ).click(function() {
 
 $( "#formulaire" ).submit(function() {
 
-	 var data = {'server':$('#hostname').val(), 'idx':$('#IDX').val(),	 'cosphi':$('#cosphi').val(), 'readtime':$('#readtime').val()	, 'cycle':$('#cycle').val(), 'dimmer':$('#dimmer').val(),'port':$('#port').val(), 'delta':$('#delta').val(),'deltaneg':$('#deltaneg').val(),  'apiKey':$('#apiKey').val(), 'facteur':$('#facteur').val(),'mqttserver':$('#mqttserver').val() } 
+	 var data = {'server':$('#hostname').val(), 'idx':$('#IDX').val(),	 'cosphi':$('#cosphi').val(), 'readtime':$('#readtime').val()	, 'cycle':$('#cycle').val(), 'dimmer':$('#dimmer').val(),'port':$('#port').val(), 'delta':$('#delta').val(),'deltaneg':$('#deltaneg').val(),  'apiKey':$('#apiKey').val(), 'facteur':$('#facteur').val(),'mqttserver':$('#mqttserver').val(),'resistance':$('#resistance').val() } 
 
 
 		
@@ -479,7 +483,7 @@ var recupconfig = $.get ({
 		document.getElementById("mqttserver").value = config[17];
 		document.getElementById("Usemqtt").checked = config[16];
 		document.getElementById("Usemqtt").value = config[16];
-		
+		document.getElementById("resistance").value = config[19];
 	
 
 

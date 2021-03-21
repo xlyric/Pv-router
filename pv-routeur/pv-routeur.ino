@@ -75,7 +75,7 @@
 // Include custom images
 #include "images.h"
 
-const String VERSION = "Version 2.8" ;
+const String VERSION = "Version 2.9" ;
 String logs;
 
 ////BETA
@@ -112,6 +112,7 @@ struct Config {
   char mqttserver[15];
   String IDXdimmer;
   int tmax;
+  int resistance;
 };
 
 const char *filename_conf = "/config.json";
@@ -167,6 +168,7 @@ void loadConfiguration(const char *filename, Config &config) {
   config.readtime = doc["readtime"] | 555;
   config.cycle = doc["cycle"] | 25;
   config.tmax = doc["tmax"] | 65;
+  config.resistance = doc["resistance"] | 1000;
   config.sending = doc["sending"] | false;
   config.autonome = doc["autonome"] | true;
   config.mqtt = doc["mqtt"] | false;
@@ -224,6 +226,7 @@ void saveConfiguration(const char *filename, const Config &config) {
   doc["mqtt"] = config.mqtt;
   doc["mqttserver"] = config.mqttserver;  
   doc["tmax"] = config.tmax;
+  doc["resistance"] = config.resistance;
 
   // Serialize JSON to file
   if (serializeJson(doc, configFile) == 0) {
@@ -318,6 +321,7 @@ bool change;
 //String serialmessage; 
 bool middlevalue=0;
 int bypassfalse=0;
+//int resistance=1000;
 
 
 int bestcosphi, bestpuissance; 
@@ -418,7 +422,7 @@ String getpuissance() {
 
 String getconfig() {
     
-  configweb = String(config.hostname) + ";" +  config.port + ";"  + config.IDX + ";"  +  VERSION +";" + middle +";"+ config.delta +";"+config.cycle+";"+config.dimmer+";"+config.cosphi+";"+config.readtime +";"+stringbool(config.UseDomoticz)+";"+stringbool(config.UseJeedom)+";"+stringbool(config.autonome)+";"+config.apiKey+";"+stringbool(config.dimmerlocal)+";"+config.facteur+";"+stringbool(config.mqtt)+";"+config.mqttserver+";"+config.deltaneg;
+  configweb = String(config.hostname) + ";" +  config.port + ";"  + config.IDX + ";"  +  VERSION +";" + middle +";"+ config.delta +";"+config.cycle+";"+config.dimmer+";"+config.cosphi+";"+config.readtime +";"+stringbool(config.UseDomoticz)+";"+stringbool(config.UseJeedom)+";"+stringbool(config.autonome)+";"+config.apiKey+";"+stringbool(config.dimmerlocal)+";"+config.facteur+";"+stringbool(config.mqtt)+";"+config.mqttserver+";"+config.deltaneg+";"+config.resistance;
   return String(configweb);
 }
 
@@ -428,7 +432,7 @@ String getchart() {
 }
 
 String getdebug() {
-  configweb = String(ESP.getFreeHeap())+ ";" + String(laststartvalue)  + ";" +  String(middle) + ";" +  phi +";"+ dimmer_power ;
+  configweb = String(ESP.getFreeHeap())+ ";" + String(laststartvalue)  + ";" +  String(middle) + ";" +  phi +";"+ config.resistance ;
     return String(configweb);
 }
 
@@ -629,6 +633,10 @@ server.on("/config.json", HTTP_ANY, [](AsyncWebServerRequest *request){
     request->send(SPIFFS, "/config.json", "application/json");
   });
 
+server.on("/doc.txt", HTTP_ANY, [](AsyncWebServerRequest *request){
+    request->send(SPIFFS, "/doc.txt", "text/plain");
+  });
+
 /// beta
 server.on("/cosphi", HTTP_ANY, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/plain", getcosphi().c_str());
@@ -669,6 +677,7 @@ server.on("/get", HTTP_ANY, [] (AsyncWebServerRequest *request) {
    if (request->hasParam(PARAM_INPUT_dimmer_power)) {dimmer_power = request->getParam( PARAM_INPUT_dimmer_power)->value().toInt(); change = 1 ;  } 
    if (request->hasParam(PARAM_INPUT_facteur)) { config.facteur = request->getParam(PARAM_INPUT_facteur)->value().toFloat();}
    if (request->hasParam(PARAM_INPUT_tmax)) { config.tmax = request->getParam(PARAM_INPUT_tmax)->value().toInt();}
+   if (request->hasParam("resistance")) { config.resistance = request->getParam("resistance")->value().toInt();}
    //reset
    if (request->hasParam(PARAM_INPUT_reset)) {Serial.println("Resetting ESP");  ESP.restart();}
    
@@ -699,7 +708,7 @@ server.on("/get", HTTP_ANY, [] (AsyncWebServerRequest *request) {
 
 
   server.begin(); 
-  affiche_info_main();
+ 
   
   if (config.mqtt==1) { client.setServer(config.mqttserver, 1883);
   mqtt(config.IDXdimmer,"0");  }
@@ -707,12 +716,15 @@ server.on("/get", HTTP_ANY, [] (AsyncWebServerRequest *request) {
   /// reset dimmer
   int httpCode;
   String baseurl; 
-   dimmer_power=0;
-   baseurl = "/?POWER=" + String(dimmer_power) ; http.begin(config.dimmer,80,baseurl);    httpCode = http.GET();  http.end();
-   delay(5000); 
-  
+  dimmer_power=0;
+  baseurl = "/?POWER=" + String(dimmer_power) ; http.begin(config.dimmer,80,baseurl);    httpCode = http.GET();  http.end();
+  delay(5000); 
 
- 
+  // récupération de la puissacen branchée
+  //resistance = mesure_resistance ();
+
+
+  affiche_info_main();
 }
 
 						//***********************************
@@ -858,7 +870,7 @@ void affiche_info_main() {
   ////// affichage de l'état conf
   display.drawString(0,54, VERSION );
   affiche_info_transmission(config.sending);
-  
+  display.drawString(0,43, String(config.resistance)+" W" );
   display.display();
 }
 
@@ -893,7 +905,8 @@ void affiche_info_volume(int volume ) {
   display.setFont(ArialMT_Plain_16);
   display.drawString(85,30, String(volume) + " W"); 
   display.drawString(85,47, String(dimmer_power) + " %"); 
-  
+
+
   
   display.display();
 }
@@ -1010,58 +1023,65 @@ void oscilloscope() {
 }
 
 //***********************************
-//************* Fonction mesure
+//************* Fonction mesure de la résistance ( à la louche )
 //***********************************
-/*
-int mesure () {
 
-  temp = 0,
-  timer = 0; 
-  //RMS = 0; 
-  int startvalue = 0; 
-  somme = 0; 
-   Serial.print("middle : ");
-   Serial.println(middle);
-  
-  front(0);
-  front(1);
-  
-  //delayMicroseconds (config.cosphi*config.readtime); // correction décalage
- // temp =  analogRead(linky);
-  // somme = abs(temp - middle); 
-  //somme = abs(somme ); 
-  //if ( somme < 5 ) { somme = temp - middle ; timer ++; startvalue = temp; }
-  //else {somme = 0 ; } 
-  //startvalue = temp; 
-  
-// analyse par volumes
- // delayMicroseconds (config.readtime);
+int mesure_resistance () {
+ // mise à 0 dimmer 
+  String baseurl; 
+  baseurl = "/?POWER=" + String(0) ; 
+  http.begin(config.dimmer,80,baseurl);   
+  int httpCode = http.GET();   
+  http.end(); 
+ delay (5000); 
+ 
+ int resistance; 
+ int boucle=0;
+ int temp=0;
+ int facteur_capteur=5; // 5watt par unité de lecture 
+ int min=1024; 
+ int max=0; 
+ int valup=0; int valdown=0;
+ 
+ //lecture 0%   
+  while (boucle < freqmesure){
+  temp =  analogRead(linky);
+  if ( temp > max )  { max = temp ; } 
+  if ( temp < min )  { min = temp ; }
+  delayMicroseconds (readtime); 
+  boucle++;
+  }
+  valdown = max-min; 
 
-//// lecture dans la période de la demi alternance fait par la diode  pour calcul de l'air
-  while ( timer < 24 )
-  {
-    temp =  analogRead(linky); 
-    //signe = digitalRead(sens);
-    //if ( signe == 0 ) {
-  //   RMS = RMS + abs(temp - middle) ; 
-      somme = somme + temp - middle ;
-     // if (timer ==0) {startvalue = temp; }
-    // }
-  timer ++ ;
-  delayMicroseconds (readtime); // frequence de 100Hz environ
-  } 
-   Serial.print("valeur depart : ");
-   Serial.println(startvalue);
-   
-   Serial.print("cycle :");
-   Serial.println(timer);
-   Serial.print("somme :");
-   Serial.println(somme);
-      laststartvalue = startvalue;
-  return (somme);
+  baseurl = "/?POWER=" + String(50) ; 
+  http.begin(config.dimmer,80,baseurl);   
+  httpCode = http.GET();   
+  http.end(); 
+  delay (5000); 
+
+  boucle=0; min=1024; max=0; 
+  //lecture 50% 
+  while (boucle < freqmesure){
+  temp =  analogRead(linky);
+  if ( temp > max )  { max = temp ; } 
+  if ( temp < min )  { min = temp ; }
+  delayMicroseconds (readtime); 
+  boucle++;
+  }
+  valup = max-min; 
+
+  resistance = ( valup - valdown )*2*5 ;
+
+  // dimmer à 0
+  baseurl = "/?POWER=" + String(0) ; 
+  http.begin(config.dimmer,80,baseurl);   
+  httpCode = http.GET();   
+  http.end();
+  
+  return (resistance);
 }
 
-*/
+
 
 
 //***********************************
@@ -1272,16 +1292,18 @@ valeur_moyenne();
 
 void dimmer(int commande){
   change = 0; 
-  
+
+  // 0 -> linky ; 1-> injection  ; 2-> stabilisé
+
   
 	if ( sigma >= 350 && dimmer_power != 0 ) { dimmer_power = 0 ;  change = 1 ;} // si grosse puissance instantanée sur le réseau, coupure du dimmer. ( ici 350w environ ) 
-	else if (commande == 0 && dimmer_power != 0 && sigma >= (config.delta+20) ) { dimmer_power += -2*((sigma-config.delta)/50) ; change = 1; }  /// si mode linky  on reduit la puissance 
+	else if (commande == 0 && dimmer_power != 0 && sigma >= (config.delta+20) ) { dimmer_power += -2*((sigma-config.delta)/(50*config.resistance/1000)) ; change = 1; }  /// si gros mode linky  on reduit la puissance par extrapolation
 	else if (commande == 0 && dimmer_power != 0 ) { dimmer_power += -1 ; change = 1; }  /// si mode linky  on reduit la puissance 
-  else if (commande == 1 && sigma <= (config.deltaneg-20) ) {   dimmer_power += 2*abs(sigma/50) ; change = 1 ; } /// si injection on augmente la puissance  ( charge de 1 KW ) 
-  else if (commande == 1  ) { dimmer_power += 1 ; change = 1 ; } /// si injection on augmente la puissance
+  else if (commande == 1 && sigma <= (config.deltaneg-20) ) {   dimmer_power += 2*abs(sigma/(50*config.resistance/1000)) ; change = 1 ; } /// si grosse injection on augmente la puissance par extrapolation
+  else if (commande == 1  ) { dimmer_power += 1 ; change = 1 ; } /// si injection legère on augmente la puissance doucement
   //else if (commande == 1  ) { dimmer_power += round(sigma/(bestpuissance * config.facteur)*100)  ; change = 1 ; } /// si injection on augmente la puissance
   
-  
+/// test puissance de sécurité 
 if ( dimmer_power >= config.num_fuse ) {dimmer_power = config.num_fuse; change = 1 ; }
 if ( dimmer_power <= 0 && dimmer_power != 0 ) {dimmer_power = 0; change = 1 ; }
 
@@ -1378,3 +1400,6 @@ String ActualTime = timeClient.getFormattedTime();
   
 }
 */
+
+
+

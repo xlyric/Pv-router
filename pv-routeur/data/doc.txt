@@ -1,10 +1,32 @@
 Utilisation du pv routeur 
 
+ce pv routeur fonctionne par analyse du sens du courant en sortie de compteur électrique ( avec une sonde de 30A  non intrusive ) 
+il communique de façon autonome avec un dimmer numérique distant ( wifi ) et se charge de la régulation 
+ou fait une  remontée MQTT vers un serveur distant qui s'en chargera 
+
 montage à faire conformément à la doc sur le git. 
 
 carte lolin v1.1 : fonctionnelle sans pb
 carte lolin V1.2 : l'oled est alimenté par VU et non VI, il faut alimenter l'oled avec VI ( + ) 
 carte wemos v1.2 : fonctionnelle sans pb.
+
+*******************
+informations clés : 
+*******************
+
+/config.json contient les valeurs de démarrages sauvegardées 
+/config  contient les valeurs actuelles de fonctionnement 
+
+l'application est configurée pour une résistance de 1000W, il est possible de changer le paramettre dans la config ( web ou fichier config.json ) 
+
+
+- le mode MQTT est sur le git déconnecté, car si il n'y a pas de serveur MQTT présent sur le réseau lors du démarrage, le routeur reboot. 
+- si il ne détecte pas de porteuse, il reboot aussi. ( --> pb d'alimentation externe )  car il ne peux pas se synchroniser
+
+il est possible de changer les paramettres manuellement : avec le lien /get?variable=valeur
+par exemple /get?fuse=80  pour mettre la limite de sécurité à 80% du dimmer. 
+
+
 
 ************* Liste des principales valeurs  ************************
 {"hostname":"192.168.1.20", --> IP du serveur Domoticz /jeedom
@@ -33,6 +55,7 @@ carte wemos v1.2 : fonctionnelle sans pb.
 
 "facteur":1.5 : facteur multiplicateur entre la mesure et sigma pour corriger le décallage entre la mesure sur le tableau linky et l'affichage.
 "fuse":50 >> fusible numérique qui limite la commande au niveau du dimmer ( ici 50 % max ) 
+
 
 ******************** erreurs courament commises : 
 
