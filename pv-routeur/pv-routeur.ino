@@ -75,7 +75,7 @@
 // Include custom images
 #include "images.h"
 
-const String VERSION = "Version 2.9" ;
+const String VERSION = "Version 2.9.1" ;
 String logs;
 
 ////BETA
@@ -393,9 +393,9 @@ String getSendmode() {
 String getServermode(String Servermode) {
   if ( Servermode == "Domoticz" ) {   config.UseDomoticz = !config.UseDomoticz; }
   if ( Servermode == "Jeedom" ) {   config.UseJeedom = !config.UseJeedom;}
-  if ( Servermode == "autonome" ) {   config.autonome = !config.autonome; }
-  if ( Servermode == "dimmer local" ) {   config.dimmerlocal = !config.dimmerlocal; }
-  if ( Servermode == "mqtt" ) {   config.mqtt = !config.mqtt; }
+  if ( Servermode == "Autonome" ) {   config.autonome = !config.autonome; }
+  if ( Servermode == "Dimmer local" ) {   config.dimmerlocal = !config.dimmerlocal; }
+  if ( Servermode == "MQTT" ) {   config.mqtt = !config.mqtt; }
 
 return String(Servermode);
 }
