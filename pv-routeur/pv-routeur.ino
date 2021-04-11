@@ -52,9 +52,9 @@
 #include <RBDdimmer.h>   /// the corrected librairy  in RBDDimmer-master-corrected.rar , the original has a bug
 // Web services
 #include <ESP8266WiFi.h>
-#include <ESPAsyncWiFiManager.h>    
-#include <ESPAsyncTCP.h>
-#include <ESPAsyncWebServer.h>
+#include <ESPAsyncWiFiManager.h>     // https://github.com/alanswx/ESPAsyncWiFiManager
+#include <ESPAsyncTCP.h>  /// https://github.com/me-no-dev/ESPAsyncTCP
+#include <ESPAsyncWebServer.h> /// https://github.com/me-no-dev/ESPAsyncWebServer 
 #include <ESP8266HTTPClient.h> 
 // File System
 #include <fs.h>
@@ -1276,7 +1276,7 @@ boolean SendToDomotic(String Svalue){
   if ( config.autonome == 1 && change == 1   ) {  baseurl = "/?POWER=" + String(dimmer_power) ; http.begin(config.dimmer,80,baseurl);   int httpCode = http.GET();
     http.end(); 
     if ( config.mqtt == 1 ) { mqtt(config.IDXdimmer, String(dimmer_power));  }
-
+    delay (3000); // delay de transmission réseau dimmer et application de la charge
       
     
     }
@@ -1297,9 +1297,9 @@ void dimmer(int commande){
 
   
 	if ( sigma >= 350 && dimmer_power != 0 ) { dimmer_power = 0 ;  change = 1 ;} // si grosse puissance instantanée sur le réseau, coupure du dimmer. ( ici 350w environ ) 
-	else if (commande == 0 && dimmer_power != 0 && sigma >= (config.delta+20) ) { dimmer_power += -2*((sigma-config.delta)/(50*config.resistance/1000)) ; change = 1; }  /// si gros mode linky  on reduit la puissance par extrapolation
+	else if (commande == 0 && dimmer_power != 0 && sigma >= (config.delta+10) ) { dimmer_power += -2*((sigma-config.delta)/(50*config.resistance/1000)) ; change = 1; }  /// si gros mode linky  on reduit la puissance par extrapolation
 	else if (commande == 0 && dimmer_power != 0 ) { dimmer_power += -1 ; change = 1; }  /// si mode linky  on reduit la puissance 
-  else if (commande == 1 && sigma <= (config.deltaneg-20) ) {   dimmer_power += 2*abs(sigma/(50*config.resistance/1000)) ; change = 1 ; } /// si grosse injection on augmente la puissance par extrapolation
+  else if (commande == 1 && sigma <= (config.deltaneg-10) ) {   dimmer_power += 2*abs(sigma/(50*config.resistance/1000)) ; change = 1 ; } /// si grosse injection on augmente la puissance par extrapolation
   else if (commande == 1  ) { dimmer_power += 1 ; change = 1 ; } /// si injection legère on augmente la puissance doucement
   //else if (commande == 1  ) { dimmer_power += round(sigma/(bestpuissance * config.facteur)*100)  ; change = 1 ; } /// si injection on augmente la puissance
   
@@ -1400,6 +1400,3 @@ String ActualTime = timeClient.getFormattedTime();
   
 }
 */
-
-
-
