@@ -2,7 +2,7 @@
 
 [![N|Solid](https://cldup.com/dTxpPi9lDf.thumb.png)](https://nodesource.com/products/nsolid)
 
-I create this Pv router for separate power part to I created this pv router to separate the power part of the analysis part. 
+I created this pv router to separate the power part of the analysis part. 
 I wanted to be able to trace the information to domoticz and leave him the processing of information 
 to redispatch the surplus power to different digital dimmer.
 
